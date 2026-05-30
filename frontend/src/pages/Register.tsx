@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { logger } from '../utils/logger';
 
 const Register = () => {
   const [email, setEmail] = useState('');
@@ -20,7 +21,9 @@ const Register = () => {
       await register(email, password, name);
       navigate('/');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Error al registrarse');
+      const msg = err.response?.data?.error || 'Error al registrarse';
+      setError(msg);
+      logger.warn('Register page: registration failed', { email, error: msg });
     } finally {
       setLoading(false);
     }

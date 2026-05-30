@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import { logger } from '../utils/logger';
 
 interface User {
   id: string;
@@ -30,6 +31,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       checkAuth();
     } else {
+      logger.debug('No token found on init');
       setLoading(false);
     }
   }, []);
@@ -38,7 +40,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const response = await api.get('/api/auth/me');
       setUser(response.data);
+      logger.info('Session restored', { userId: response.data.id, email: response.data.email });
     } catch (error) {
+      logger.warn('Session invalid, clearing token');
       localStorage.removeItem('token');
       delete api.defaults.headers.common['Authorization'];
     } finally {
@@ -52,6 +56,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem('token', token);
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     setUser(user);
+    logger.info('Login successful', { userId: user.id, email });
     navigate('/');
   };
 
@@ -61,13 +66,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem('token', token);
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     setUser(user);
+    logger.info('Registration successful', { userId: user.id, email });
     navigate('/');
   };
 
   const logout = () => {
+    const userId = user?.id;
+    const email = user?.email;
     localStorage.removeItem('token');
     delete api.defaults.headers.common['Authorization'];
     setUser(null);
+    logger.info('User logged out', { userId, email });
     navigate('/login');
   };
 

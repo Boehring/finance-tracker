@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../hooks/useAuth';
+import { logger } from '../utils/logger';
 import dayjs from 'dayjs';
 
 interface Expense {
@@ -61,7 +62,7 @@ const Dashboard = () => {
       const response = await api.get('/api/expenses?period=day&date=' + dayjs().format('YYYY-MM-DD'));
       setRecentExpenses(response.data.slice(0, 5));
     } catch (error) {
-      console.error('Error loading dashboard data:', error);
+      logger.error('Error loading dashboard data', { error });
     } finally {
       setLoading(false);
     }
@@ -120,7 +121,7 @@ const Dashboard = () => {
                     {expense.category?.name && `${expense.category.name} · `}{expense.payer.name}
                   </p>
                 </div>
-                <span className="text-rose-600 font-semibold text-sm">-{expense.amount.toFixed(2)}€</span>
+                <span className="text-rose-600 font-semibold text-sm">-{Number(expense.amount).toFixed(2)}€</span>
               </Link>
             ))}
           </div>

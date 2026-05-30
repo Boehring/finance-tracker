@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
+import { logger } from '../utils/logger';
 
 interface DebtSummary {
   personId: string;
@@ -33,14 +34,14 @@ const Debts = () => {
       setSummary(response.data.summary);
       setDetails(response.data.details);
     } catch (error) {
-      console.error('Error loading debts:', error);
+      logger.error('Error loading debts', { error });
     } finally {
       setLoading(false);
     }
   };
 
   const settleDebt = async (debtorId: string, creditorId: string, amount: number) => {
-    if (!confirm(`¿Confirmar que se salda la deuda de ${amount.toFixed(2)}€?`)) return;
+    if (!confirm(`¿Confirmar que se salda la deuda de ${Number(amount).toFixed(2)}€?`)) return;
     try {
       setSettling(true);
       await api.post('/api/debts/settle', {
@@ -49,10 +50,13 @@ const Debts = () => {
         amount,
         date: new Date().toISOString(),
       });
+      logger.info('Debt settled', { debtorId, creditorId, amount });
       alert('Deuda saldada correctamente');
       loadData();
     } catch (error: any) {
-      alert(error.response?.data?.error || 'Error al saldar deuda');
+      const msg = error.response?.data?.error || 'Error al saldar deuda';
+      logger.error('Error settling debt', { debtorId, creditorId, amount, error: msg });
+      alert(msg);
     } finally {
       setSettling(false);
     }
@@ -85,12 +89,12 @@ const Debts = () => {
                     <div className="flex items-center gap-3">
                       {debt.owes > 0 && (
                         <span className="text-sm font-medium px-3 py-1 bg-rose-50 text-rose-600 rounded-full border border-rose-100">
-                          Debe {debt.owes.toFixed(2)}€
+                          Debe {Number(debt.owes).toFixed(2)}€
                         </span>
                       )}
                       {debt.isOwed > 0 && (
                         <span className="text-sm font-medium px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100">
-                          Le deben {debt.isOwed.toFixed(2)}€
+                          Le deben {Number(debt.isOwed).toFixed(2)}€
                         </span>
                       )}
                     </div>
@@ -113,7 +117,7 @@ const Debts = () => {
                     <div className="flex items-center gap-2 text-sm text-slate-700">
                       <span className="font-medium text-slate-900">{debt.debtorName}</span>
                       <span className="text-slate-400">→</span>
-                      <span className="font-semibold text-rose-600">{debt.amount.toFixed(2)}€</span>
+                      <span className="font-semibold text-rose-600">{Number(debt.amount).toFixed(2)}€</span>
                       <span className="text-slate-400">→</span>
                       <span className="font-medium text-slate-900">{debt.creditorName}</span>
                     </div>

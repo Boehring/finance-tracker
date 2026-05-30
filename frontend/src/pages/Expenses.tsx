@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { Eye, Pencil, Trash2 } from 'lucide-react';
 import api from '../services/api';
+import { logger } from '../utils/logger';
 import dayjs from 'dayjs';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 interface Expense {
   id: string;
   title: string;
   amount: number;
   date: string;
-  category?: { name: string; color?: string };
+  category?: { name: string; color?: string; icon?: string };
   payer: { id: string; name: string };
   participants: Array<{ person: { id: string; name: string }; share: number }>;
 }
@@ -23,6 +26,7 @@ const VIEW_LABELS: Record<string, string> = {
 const Expenses = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const view = searchParams.get('view') || 'day';
   const date = searchParams.get('date') || dayjs().format('YYYY-MM-DD');
@@ -38,7 +42,7 @@ const Expenses = () => {
       const data = Object.values(response.data).flat() as Expense[];
       setExpenses(data);
     } catch (error) {
-      console.error('Error loading expenses:', error);
+      logger.error('Error loading expenses', { view, date, error });
     } finally {
       setLoading(false);
     }
@@ -50,13 +54,16 @@ const Expenses = () => {
     setSearchParams({ view, date: newDate });
   };
 
-  const deleteExpense = async (id: string) => {
-    if (!confirm('¿Estás seguro de eliminar este gasto?')) return;
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
     try {
-      await api.delete(`/api/expenses/${id}`);
+      await api.delete(`/api/expenses/${deleteTarget.id}`);
+      logger.info('Expense deleted from list', { expenseId: deleteTarget.id });
       loadExpenses();
     } catch (error) {
-      console.error('Error deleting expense:', error);
+      logger.error('Error deleting expense', { expenseId: deleteTarget.id, error });
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -112,24 +119,27 @@ const Expenses = () => {
           No hay gastos para este período
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {expenses.map((expense) => (
             <div
               key={expense.id}
-              className="bg-white border border-slate-200 rounded-xl px-5 py-4 flex items-center justify-between hover:border-slate-300 transition-colors"
+              className="bg-white border border-slate-200 rounded-xl px-4 py-2.5 flex items-center justify-between hover:border-slate-300 transition-colors"
             >
               <div className="flex-1 min-w-0">
                 <Link
                   to={`/expenses/${expense.id}`}
-                  className="font-medium text-slate-900 hover:text-indigo-600 transition-colors"
+                  className="font-medium text-slate-900 hover:text-indigo-600 transition-colors text-sm"
                 >
                   {expense.title}
                 </Link>
-                <div className="flex items-center gap-1.5 mt-1">
+                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                   {expense.category?.name && (
                     <>
+                      {expense.category.icon && (
+                        <span className="text-xs">{expense.category.icon}</span>
+                      )}
                       <span
-                        className="inline-block w-2 h-2 rounded-full"
+                        className="inline-block w-2 h-2 rounded-full shrink-0"
                         style={{ background: expense.category.color || '#94a3b8' }}
                       />
                       <span className="text-xs text-slate-500">{expense.category.name}</span>
@@ -137,40 +147,48 @@ const Expenses = () => {
                     </>
                   )}
                   <span className="text-xs text-slate-500">{expense.payer.name}</span>
-                </div>
-                <div className="flex items-center gap-1 mt-2">
-                  {expense.participants.map((p) => (
-                    <span
-                      key={p.person.id}
-                      title={p.person.name}
-                      className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center justify-center"
-                    >
-                      {p.person.name.charAt(0).toUpperCase()}
-                    </span>
-                  ))}
+                  {expense.participants.length > 0 && (
+                    <>
+                      <span className="text-xs text-slate-300">·</span>
+                      <div className="flex items-center gap-0.5">
+                        {expense.participants.map((p) => (
+                          <span
+                            key={p.person.id}
+                            title={p.person.name}
+                            className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center justify-center"
+                          >
+                            {p.person.name.charAt(0).toUpperCase()}
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 ml-4 shrink-0">
-                <span className="text-rose-600 font-semibold">{expense.amount.toFixed(2)}€</span>
-                <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-3 ml-4 shrink-0">
+                <span className="text-rose-600 font-semibold text-sm">{Number(expense.amount).toFixed(2)}€</span>
+                <div className="flex items-center gap-0.5">
                   <Link
                     to={`/expenses/${expense.id}`}
-                    className="px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                    className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                    title="Ver"
                   >
-                    Ver
+                    <Eye size={15} />
                   </Link>
                   <Link
                     to={`/expenses/${expense.id}/edit`}
-                    className="px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                    className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                    title="Editar"
                   >
-                    Editar
+                    <Pencil size={15} />
                   </Link>
                   <button
-                    onClick={() => deleteExpense(expense.id)}
-                    className="px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                    onClick={() => setDeleteTarget({ id: expense.id, name: expense.title })}
+                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                    title="Eliminar"
                   >
-                    Eliminar
+                    <Trash2 size={15} />
                   </button>
                 </div>
               </div>
@@ -178,6 +196,16 @@ const Expenses = () => {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        title="Eliminar gasto"
+        message={`¿Eliminar "${deleteTarget?.name}"? Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        danger
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 };

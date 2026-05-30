@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
 import api from '../services/api';
+import { logger } from '../utils/logger';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 interface Person {
   id: string;
@@ -24,7 +27,6 @@ const evaluateMath = (expr: string): number | null => {
   if (!sanitized) return null;
   if (!/^[\d+\-*/().\s]+$/.test(sanitized)) return null;
   try {
-    // eslint-disable-next-line no-new-func
     const result = new Function('return ' + sanitized)();
     return typeof result === 'number' && isFinite(result) ? result : null;
   } catch {
@@ -41,8 +43,11 @@ const CreateExpense = () => {
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [descriptionPreview, setDescriptionPreview] = useState(false);
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const today = new Date();
+  const localDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const [date, setDate] = useState(localDate);
   const [categoryId, setCategoryId] = useState('');
   const [payerId, setPayerId] = useState('');
   const [splitType, setSplitType] = useState<'PERCENTAGE' | 'AMOUNT'>('PERCENTAGE');
@@ -55,6 +60,7 @@ const CreateExpense = () => {
   const [attachments, setAttachments] = useState<File[]>([]);
   const errorRef = useRef<HTMLDivElement>(null);
   const [existingAttachments, setExistingAttachments] = useState<Array<{ id: string; originalName: string }>>([]);
+  const [attachDeleteTarget, setAttachDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     loadData();
@@ -77,7 +83,7 @@ const CreateExpense = () => {
         setPayerId(peopleRes.data[0].id);
       }
     } catch (error) {
-      console.error('Error loading data:', error);
+      logger.error('Error loading form data', { error });
     }
   };
 
@@ -98,13 +104,35 @@ const CreateExpense = () => {
         amount: p.amount != null ? p.amount.toString() : undefined,
       })));
       setExistingAttachments(expense.attachments || []);
+      logger.info('Edit mode: expense loaded', { expenseId: id });
     } catch (error) {
-      console.error('Error loading expense:', error);
+      logger.error('Error loading expense for edit', { expenseId: id, error });
       navigate('/expenses');
     }
   };
 
-  const addParticipant = () => setParticipants([...participants, { personId: '' }]);
+  const addParticipant = () => {
+    const newParticipant: Participant = { personId: '' };
+
+    if (splitType === 'AMOUNT') {
+      const sumOthers = participants
+        .filter(p => p.amount)
+        .reduce((sum, p) => sum + parseFloat(p.amount || '0'), 0);
+      const totalNum = parseFloat(amount);
+      if (!isNaN(totalNum) && totalNum > 0) {
+        const remaining = totalNum - sumOthers;
+        if (remaining > 0.001) newParticipant.amount = remaining.toFixed(2);
+      }
+    } else {
+      const sumOthers = participants
+        .filter(p => p.percentage)
+        .reduce((sum, p) => sum + parseFloat(p.percentage || '0'), 0);
+      const remaining = 100 - sumOthers;
+      if (remaining > 0.001) newParticipant.percentage = remaining.toFixed(2);
+    }
+
+    setParticipants([...participants, newParticipant]);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) setAttachments([...attachments, ...Array.from(e.target.files)]);
@@ -112,19 +140,34 @@ const CreateExpense = () => {
 
   const removeAttachment = (index: number) => setAttachments(attachments.filter((_, i) => i !== index));
 
-  const removeExistingAttachment = async (attachmentId: string) => {
-    if (!confirm('¿Eliminar este adjunto?')) return;
+  const handleAttachDeleteConfirm = async () => {
+    if (!attachDeleteTarget) return;
     try {
-      await api.delete(`/api/expenses/${id}/attachments/${attachmentId}`);
-      setExistingAttachments(existingAttachments.filter(a => a.id !== attachmentId));
+      await api.delete(`/api/expenses/${id}/attachments/${attachDeleteTarget.id}`);
+      setExistingAttachments(existingAttachments.filter(a => a.id !== attachDeleteTarget.id));
+      logger.info('Existing attachment removed', { expenseId: id, attachmentId: attachDeleteTarget.id });
     } catch (error) {
-      console.error('Error removing attachment:', error);
+      logger.error('Error removing attachment', { expenseId: id, attachmentId: attachDeleteTarget.id, error });
+    } finally {
+      setAttachDeleteTarget(null);
     }
   };
 
   const updateParticipant = (index: number, field: string, value: string) => {
     const updated = [...participants];
     updated[index] = { ...updated[index], [field]: value };
+
+    if (field === 'personId' && value === payerId) {
+      if (splitType === 'AMOUNT' && !updated[index].amount) {
+        const totalNum = parseFloat(amount);
+        if (!isNaN(totalNum) && totalNum > 0) {
+          updated[index].amount = totalNum.toFixed(2);
+        }
+      } else if (splitType === 'PERCENTAGE' && !updated[index].percentage) {
+        updated[index].percentage = '100';
+      }
+    }
+
     setParticipants(updated);
   };
 
@@ -183,9 +226,11 @@ const CreateExpense = () => {
 
       if (isEdit) {
         await api.put(`/api/expenses/${id}`, expensePayload);
+        logger.info('Expense updated', { expenseId: id, title });
       } else {
         const response = await api.post('/api/expenses', expensePayload);
         expenseId = response.data.id;
+        logger.info('Expense created', { expenseId, title, amount: parseFloat(amount) });
       }
 
       if (attachments.length > 0 && expenseId) {
@@ -196,11 +241,14 @@ const CreateExpense = () => {
             headers: { 'Content-Type': 'multipart/form-data' },
           });
         }
+        logger.info('Attachments uploaded', { expenseId, count: attachments.length });
       }
 
       navigate('/expenses');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Error al guardar el gasto');
+      const msg = err.response?.data?.error || 'Error al guardar el gasto';
+      setError(msg);
+      logger.error('Error saving expense', { isEdit, error: msg });
     } finally {
       setLoading(false);
     }
@@ -228,12 +276,41 @@ const CreateExpense = () => {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-slate-700">Descripción</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className={`${inputClass} min-h-[80px] resize-none`}
-            />
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-slate-700">Descripción</label>
+              <div className="flex items-center gap-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setDescriptionPreview(false)}
+                  className={`px-2 py-0.5 rounded transition-colors ${!descriptionPreview ? 'bg-indigo-100 text-indigo-700 font-medium' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  Editar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDescriptionPreview(true)}
+                  className={`px-2 py-0.5 rounded transition-colors ${descriptionPreview ? 'bg-indigo-100 text-indigo-700 font-medium' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  Vista previa
+                </button>
+              </div>
+            </div>
+            {descriptionPreview ? (
+              <div className="min-h-[80px] border border-slate-300 rounded-lg px-3 py-2.5 text-sm text-slate-900 [&_h1]:text-base [&_h1]:font-bold [&_h1]:mb-1 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mb-1 [&_h3]:font-semibold [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:ml-4 [&_ul]:mb-1 [&_ol]:list-decimal [&_ol]:ml-4 [&_ol]:mb-1 [&_p]:mb-1 [&_p:last-child]:mb-0 [&_code]:bg-slate-100 [&_code]:rounded [&_code]:px-1 [&_code]:font-mono [&_code]:text-xs [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:text-slate-600 [&_blockquote]:italic">
+                {description ? (
+                  <ReactMarkdown>{description}</ReactMarkdown>
+                ) : (
+                  <span className="text-slate-400 italic">Sin descripción</span>
+                )}
+              </div>
+            ) : (
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className={`${inputClass} min-h-[80px] resize-none`}
+                placeholder="Supports Markdown: **bold**, *italic*, - lists..."
+              />
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -380,7 +457,7 @@ const CreateExpense = () => {
                   <span className="text-sm text-slate-700">{att.originalName}</span>
                   <button
                     type="button"
-                    onClick={() => removeExistingAttachment(att.id)}
+                    onClick={() => setAttachDeleteTarget({ id: att.id, name: att.originalName })}
                     className="text-slate-400 hover:text-rose-500 text-lg leading-none transition-colors"
                   >
                     ×
@@ -408,6 +485,16 @@ const CreateExpense = () => {
           </button>
         </div>
       </form>
+
+      <ConfirmDialog
+        isOpen={!!attachDeleteTarget}
+        title="Eliminar adjunto"
+        message={`¿Eliminar "${attachDeleteTarget?.name}"?`}
+        confirmLabel="Eliminar"
+        danger
+        onConfirm={handleAttachDeleteConfirm}
+        onCancel={() => setAttachDeleteTarget(null)}
+      />
     </div>
   );
 };

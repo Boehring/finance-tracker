@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { Pencil, Trash2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import api from '../services/api';
+import { logger } from '../utils/logger';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 interface Expense {
   id: string;
@@ -9,7 +13,7 @@ interface Expense {
   amount: number;
   date: string;
   type: string;
-  category?: { name: string; color?: string };
+  category?: { name: string; color?: string; icon?: string };
   payer: { id: string; name: string };
   participants: Array<{
     person: { id: string; name: string };
@@ -31,6 +35,7 @@ const ExpenseView = () => {
   const navigate = useNavigate();
   const [expense, setExpense] = useState<Expense | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   useEffect(() => {
     loadExpense();
@@ -41,20 +46,22 @@ const ExpenseView = () => {
       const response = await api.get(`/api/expenses/${id}`);
       setExpense(response.data);
     } catch (error) {
-      console.error('Error loading expense:', error);
+      logger.error('Error loading expense detail', { expenseId: id, error });
       navigate('/expenses');
     } finally {
       setLoading(false);
     }
   };
 
-  const deleteExpense = async () => {
-    if (!confirm('¿Estás seguro de eliminar este gasto?')) return;
+  const handleDeleteConfirm = async () => {
     try {
       await api.delete(`/api/expenses/${id}`);
+      logger.info('Expense deleted from detail view', { expenseId: id });
       navigate('/expenses');
     } catch (error) {
-      console.error('Error deleting expense:', error);
+      logger.error('Error deleting expense from detail', { expenseId: id, error });
+    } finally {
+      setShowDeleteDialog(false);
     }
   };
 
@@ -73,22 +80,24 @@ const ExpenseView = () => {
         <div className="flex items-center gap-2">
           <Link
             to={`/expenses/${id}/edit`}
-            className="px-3 py-1.5 text-sm font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+            className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-slate-200"
+            title="Editar"
           >
-            Editar
+            <Pencil size={16} />
           </Link>
           <button
-            onClick={deleteExpense}
-            className="px-3 py-1.5 text-sm font-medium text-rose-600 border border-rose-200 rounded-lg hover:bg-rose-50 transition-colors"
+            onClick={() => setShowDeleteDialog(true)}
+            className="p-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors border border-rose-200"
+            title="Eliminar"
           >
-            Eliminar
+            <Trash2 size={16} />
           </button>
         </div>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl p-6 mb-4">
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Total</p>
-        <p className="text-4xl font-bold text-rose-600 mb-6">-{expense.amount.toFixed(2)}€</p>
+        <p className="text-4xl font-bold text-rose-600 mb-6">-{Number(expense.amount).toFixed(2)}€</p>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -103,7 +112,10 @@ const ExpenseView = () => {
             <div>
               <p className="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Categoría</p>
               <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full inline-block" style={{ background: expense.category.color || '#94a3b8' }} />
+                {expense.category.icon && (
+                  <span className="text-base leading-none">{expense.category.icon}</span>
+                )}
+                <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: expense.category.color || '#94a3b8' }} />
                 <span className="text-sm text-slate-800">{expense.category.name}</span>
               </div>
             </div>
@@ -111,7 +123,9 @@ const ExpenseView = () => {
           {expense.description && (
             <div className="col-span-2">
               <p className="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Descripción</p>
-              <p className="text-sm text-slate-800">{expense.description}</p>
+              <div className="text-sm text-slate-800 [&_h1]:text-base [&_h1]:font-bold [&_h1]:mb-1 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mb-1 [&_h3]:font-semibold [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:ml-4 [&_ul]:mb-1 [&_ol]:list-decimal [&_ol]:ml-4 [&_ol]:mb-1 [&_p]:mb-1 [&_p:last-child]:mb-0 [&_code]:bg-slate-100 [&_code]:rounded [&_code]:px-1 [&_code]:font-mono [&_code]:text-xs [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:text-slate-600 [&_blockquote]:italic [&_a]:text-indigo-600 [&_a]:underline">
+                <ReactMarkdown>{expense.description}</ReactMarkdown>
+              </div>
             </div>
           )}
         </div>
@@ -131,7 +145,7 @@ const ExpenseView = () => {
                   {p.percentage != null ? `${p.percentage}%` : p.amount != null ? `${p.amount}€` : ''}
                 </p>
               </div>
-              <span className="text-sm font-semibold text-slate-700">{p.share.toFixed(2)}€</span>
+              <span className="text-sm font-semibold text-slate-700">{Number(p.share).toFixed(2)}€</span>
             </div>
           ))}
         </div>
@@ -156,6 +170,16 @@ const ExpenseView = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={showDeleteDialog}
+        title="Eliminar gasto"
+        message={`¿Eliminar "${expense.title}"? Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        danger
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setShowDeleteDialog(false)}
+      />
     </div>
   );
 };

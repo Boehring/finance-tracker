@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { logger } from '../utils/logger';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -19,7 +20,9 @@ const Login = () => {
       await login(email, password);
       navigate('/');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Error al iniciar sesión');
+      const msg = err.response?.data?.error || 'Error al iniciar sesión';
+      setError(msg);
+      logger.warn('Login page: authentication failed', { email, error: msg });
     } finally {
       setLoading(false);
     }
