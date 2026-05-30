@@ -1,0 +1,12 @@
+{
+  "name": "finance-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "stop": "lsof -ti:3001,5173 | xargs kill -9 2>/dev/null; echo 'App stopped'"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
