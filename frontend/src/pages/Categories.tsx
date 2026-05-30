@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import api from '../services/api';
 import { logger } from '../utils/logger';
+import dayjs from 'dayjs';
 
 interface Category {
   id: string;
@@ -87,11 +88,12 @@ const Categories = () => {
   const [showEditIconPicker, setShowEditIconPicker] = useState(false);
 
   const [period, setPeriod] = useState<Period>('month');
+  const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
   const [stats, setStats] = useState<CategoryStat[]>([]);
   const [statsLoading, setStatsLoading] = useState(false);
 
   useEffect(() => { loadCategories(); }, []);
-  useEffect(() => { loadStats(period); }, [period]);
+  useEffect(() => { loadStats(period, date); }, [period, date]);
 
   const loadCategories = async () => {
     try {
@@ -104,10 +106,12 @@ const Categories = () => {
     }
   };
 
-  const loadStats = async (p: Period) => {
+  const loadStats = async (p: Period, d: string) => {
     setStatsLoading(true);
     try {
-      const response = await api.get(`/api/categories/stats?period=${p}`);
+      const params: Record<string, string> = { period: p };
+      if (p !== 'all') params.date = d;
+      const response = await api.get('/api/categories/stats', { params });
       setStats(response.data);
     } catch (err) {
       logger.error('Error loading category stats', { err });
@@ -116,9 +120,13 @@ const Categories = () => {
     }
   };
 
+  const changeDate = (dir: number) => {
+    setDate(dayjs(date).add(dir, period as dayjs.ManipulateType).format('YYYY-MM-DD'));
+  };
+
   const refresh = () => {
     loadCategories();
-    loadStats(period);
+    loadStats(period, date);
   };
 
   const addCategory = async (e: React.FormEvent) => {
@@ -364,6 +372,25 @@ const Categories = () => {
             ))}
           </div>
         </div>
+        {period !== 'all' && (
+          <div className="flex items-center gap-3 mb-4">
+            <button
+              type="button"
+              onClick={() => changeDate(-1)}
+              className="w-8 h-8 flex items-center justify-center rounded-full border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
+            >
+              ←
+            </button>
+            <span className="text-sm font-medium text-slate-700 min-w-[120px] text-center">{date}</span>
+            <button
+              type="button"
+              onClick={() => changeDate(1)}
+              className="w-8 h-8 flex items-center justify-center rounded-full border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
+            >
+              →
+            </button>
+          </div>
+        )}
 
         {statsLoading ? (
           <div className="text-center text-slate-400 text-sm py-8">Cargando...</div>

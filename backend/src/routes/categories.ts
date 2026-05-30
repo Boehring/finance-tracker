@@ -39,21 +39,33 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 router.get('/stats', async (req: AuthRequest, res: Response) => {
   try {
     const period = (req.query.period as string) || 'all';
+    const dateParam = req.query.date as string | undefined;
 
     let startDate: Date | undefined;
-    const now = new Date();
+    let endDate: Date | undefined;
+    const ref = dateParam ? new Date(dateParam) : new Date();
 
     if (period === 'day') {
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      startDate = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+      endDate = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate(), 23, 59, 59, 999);
     } else if (period === 'week') {
-      startDate = new Date(now);
-      startDate.setDate(now.getDate() - now.getDay());
-      startDate.setHours(0, 0, 0, 0);
+      const weekStart = new Date(ref);
+      weekStart.setDate(ref.getDate() - ref.getDay());
+      weekStart.setHours(0, 0, 0, 0);
+      startDate = weekStart;
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      weekEnd.setHours(23, 59, 59, 999);
+      endDate = weekEnd;
     } else if (period === 'month') {
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      startDate = new Date(ref.getFullYear(), ref.getMonth(), 1);
+      endDate = new Date(ref.getFullYear(), ref.getMonth() + 1, 0, 23, 59, 59, 999);
     } else if (period === 'year') {
-      startDate = new Date(now.getFullYear(), 0, 1);
+      startDate = new Date(ref.getFullYear(), 0, 1);
+      endDate = new Date(ref.getFullYear(), 11, 31, 23, 59, 59, 999);
     }
+
+    const dateFilter = startDate && endDate ? { gte: startDate, lte: endDate } : startDate ? { gte: startDate } : undefined;
 
     const categories = await prisma.category.findMany({
       where: { userId: req.userId },
@@ -65,7 +77,7 @@ router.get('/stats', async (req: AuthRequest, res: Response) => {
       where: {
         createdById: req.userId,
         type: 'EXPENSE',
-        ...(startDate ? { date: { gte: startDate } } : {}),
+        ...(dateFilter ? { date: dateFilter } : {}),
         categoryId: { not: null },
       },
       _sum: { amount: true },
