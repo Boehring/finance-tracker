@@ -13,6 +13,9 @@ import {
   apiCreateExpense,
   apiGetDebts,
   apiSettleDebt,
+  apiCreatePerson,
+  apiCreateCategory,
+  apiGetContext,
 } from "./services/api.js";
 
 const server = new McpServer({
@@ -469,6 +472,155 @@ Examples:
       return {
         content: [{ type: "text", text }],
         structuredContent: { settlement: result.settlement } as Record<string, unknown>,
+      };
+    } catch (error) {
+      return { content: [{ type: "text", text: handleApiError(error) }] };
+    }
+  }
+);
+
+// ── finance_get_context ───────────────────────────────────────────────────────
+
+server.registerTool(
+  "finance_get_context",
+  {
+    title: "Get Full Context",
+    description: `Fetch all context needed to work with the Finance Tracker in a single call:
+- List of all people (with IDs)
+- List of all categories (with IDs)
+- Current debt balances (summary + directional breakdown)
+
+Use this as your first call after finance_login to load everything at once instead of
+calling finance_list_people, finance_list_categories, and finance_get_debts separately.
+
+Returns:
+  {
+    "people":     [{ id, name, lastName }],
+    "categories": [{ id, name, color, icon }],
+    "debts": {
+      "summary": [{ personName, owes, isOwed, netDebt }],
+      "details": [{ debtorName, creditorName, amount }]
+    }
+  }`,
+    inputSchema: z.object({}),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async () => {
+    try {
+      const { people, categories, debts } = await apiGetContext();
+
+      const peopleOut = people.map((p) => ({
+        id: p.id,
+        name: p.name,
+        lastName: p.lastName ?? null,
+      }));
+      const categoriesOut = categories.map((c) => ({
+        id: c.id,
+        name: c.name,
+        color: c.color ?? null,
+        icon: c.icon ?? null,
+      }));
+
+      const output = { people: peopleOut, categories: categoriesOut, debts };
+      return {
+        content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+        structuredContent: output as unknown as Record<string, unknown>,
+      };
+    } catch (error) {
+      return { content: [{ type: "text", text: handleApiError(error) }] };
+    }
+  }
+);
+
+// ── finance_create_person ─────────────────────────────────────────────────────
+
+server.registerTool(
+  "finance_create_person",
+  {
+    title: "Create Person",
+    description: `Add a new participant to the Finance Tracker.
+
+Args:
+  - name (string): First name (required)
+  - lastName (string, optional): Last name
+  - identifier (string, optional): Short alias or nickname (e.g. "mom", "flatmate-2")
+
+Returns:
+  The created person with their ID.
+
+Examples:
+  - "add Ana as a participant" → finance_create_person({ name: "Ana" })
+  - "add Carlos García" → finance_create_person({ name: "Carlos", lastName: "García" })`,
+    inputSchema: z.object({
+      name: z.string().min(1).max(100).describe("First name of the person"),
+      lastName: z.string().optional().describe("Last name (optional)"),
+      identifier: z.string().optional().describe("Short alias or nickname (optional)"),
+    }),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({ name, lastName, identifier }) => {
+    try {
+      const person = await apiCreatePerson({ name, lastName, identifier });
+      const fullName = [person.name, person.lastName].filter(Boolean).join(" ");
+      const text = `✓ Person created: ${fullName} (ID: ${person.id})`;
+      return {
+        content: [{ type: "text", text }],
+        structuredContent: { person } as Record<string, unknown>,
+      };
+    } catch (error) {
+      return { content: [{ type: "text", text: handleApiError(error) }] };
+    }
+  }
+);
+
+// ── finance_create_category ───────────────────────────────────────────────────
+
+server.registerTool(
+  "finance_create_category",
+  {
+    title: "Create Category",
+    description: `Add a new expense category to the Finance Tracker.
+
+Args:
+  - name (string): Category name (required, e.g. "Groceries", "Transport")
+  - color (string, optional): Hex colour code (e.g. "#FF5733")
+  - icon (string, optional): Emoji or icon identifier (e.g. "🛒", "food")
+
+Returns:
+  The created category with its ID.
+
+Examples:
+  - "create a groceries category" → finance_create_category({ name: "Groceries", icon: "🛒" })
+  - "add Transport category in blue" → finance_create_category({ name: "Transport", color: "#3B82F6", icon: "🚗" })`,
+    inputSchema: z.object({
+      name: z.string().min(1).max(100).describe("Category name"),
+      color: z.string().optional().describe("Hex colour code (optional, e.g. \"#FF5733\")"),
+      icon: z.string().optional().describe("Emoji or icon identifier (optional, e.g. \"🛒\")"),
+    }),
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({ name, color, icon }) => {
+    try {
+      const category = await apiCreateCategory({ name, color, icon });
+      const text = `✓ Category created: ${category.name} (ID: ${category.id})`;
+      return {
+        content: [{ type: "text", text }],
+        structuredContent: { category } as Record<string, unknown>,
       };
     } catch (error) {
       return { content: [{ type: "text", text: handleApiError(error) }] };
