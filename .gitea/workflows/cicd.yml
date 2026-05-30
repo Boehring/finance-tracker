@@ -1,0 +1,295 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: [main, master]
+
+# Variables de entorno globales reutilizadas en todos los jobs
+env:
+  # URL base del registro de Gitea (sin protocolo); configúralo como variable de repositorio
+  # Ejemplo: gitea.midominio.com
+  REGISTRY: ${{ vars.GITEA_REGISTRY }}
+  OWNER: ${{ gitea.repository_owner }}
+  REPO: ${{ gitea.repository }}
+  BACKEND_IMAGE: finance-tracker-backend
+  FRONTEND_IMAGE: finance-tracker-frontend
+
+# ─────────────────────────────────────────────
+# JOB 1 – Construir el backend (TypeScript → dist/)
+# ─────────────────────────────────────────────
+jobs:
+  build-backend:
+    name: Build Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Type-check & compile
+        run: npm run build
+
+      # Empaquetar el artefacto compilado
+      - name: Create backend tarball
+        run: |
+          tar -czf ../backend-dist.tar.gz \
+            dist/ \
+            prisma/ \
+            package.json \
+            package-lock.json \
+            docker-entrypoint.sh
+
+      # Subir el artefacto al Package Registry genérico de Gitea
+      # Endpoint: PUT <gitea>/api/packages/<owner>/generic/<pkg>/<version>/<file>
+      - name: Publish backend artifact to Gitea Package Registry
+        if: github.event_name != 'pull_request'
+        run: |
+          VERSION="${{ github.ref_name }}"
+          # Para ramas usar el SHA corto; para tags usar el nombre de la etiqueta
+          if [[ "${{ github.ref_type }}" != "tag" ]]; then
+            VERSION="dev-$(echo '${{ github.sha }}' | cut -c1-7)"
+          fi
+          curl --fail -s \
+            -H "Authorization: token ${{ secrets.GITEA_TOKEN }}" \
+            -H "Content-Type: application/octet-stream" \
+            --upload-file ../backend-dist.tar.gz \
+            "${{ vars.GITEA_URL }}/api/packages/${OWNER}/generic/finance-tracker-backend/${VERSION}/backend-dist.tar.gz"
+          echo "ARTIFACT_VERSION=${VERSION}" >> $GITHUB_ENV
+
+      - name: Upload artifact (entre jobs)
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-dist
+          path: backend-dist.tar.gz
+          retention-days: 1
+
+  # ─────────────────────────────────────────────
+  # JOB 2 – Construir el frontend (Vite → dist/)
+  # ─────────────────────────────────────────────
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check & build
+        run: npm run build
+
+      - name: Create frontend tarball
+        run: tar -czf ../frontend-dist.tar.gz dist/ nginx.conf
+
+      # Subir al Package Registry genérico de Gitea
+      - name: Publish frontend artifact to Gitea Package Registry
+        if: github.event_name != 'pull_request'
+        run: |
+          VERSION="${{ github.ref_name }}"
+          if [[ "${{ github.ref_type }}" != "tag" ]]; then
+            VERSION="dev-$(echo '${{ github.sha }}' | cut -c1-7)"
+          fi
+          curl --fail -s \
+            -H "Authorization: token ${{ secrets.GITEA_TOKEN }}" \
+            -H "Content-Type: application/octet-stream" \
+            --upload-file ../frontend-dist.tar.gz \
+            "${{ vars.GITEA_URL }}/api/packages/${OWNER}/generic/finance-tracker-frontend/${VERSION}/frontend-dist.tar.gz"
+
+      - name: Upload artifact (entre jobs)
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend-dist.tar.gz
+          retention-days: 1
+
+  # ─────────────────────────────────────────────
+  # JOB 3 – Construir y publicar imágenes Docker
+  # ─────────────────────────────────────────────
+  build-and-push-images:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    # Solo en push (no en PRs) y tras compilar con éxito ambos artefactos
+    if: github.event_name != 'pull_request'
+    needs: [build-backend, build-frontend]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Calcular la versión/tag de las imágenes
+      - name: Compute image tag
+        id: meta
+        run: |
+          SHA_SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="dev-${SHA_SHORT}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "sha_short=${SHA_SHORT}" >> $GITHUB_OUTPUT
+
+      # Habilitar buildx para caché y multi-plataforma
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Login en el Container Registry de Gitea (compatible con OCI/Docker)
+      - name: Login to Gitea Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ gitea.actor }}
+          password: ${{ secrets.GITEA_TOKEN }}
+
+      # ── Backend image ──
+      - name: Build & push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          target: production
+          push: true
+          # Se etiqueta tanto con la versión calculada como con "latest" en main
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.BACKEND_IMAGE }}:${{ steps.meta.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.BACKEND_IMAGE }}:latest
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.BACKEND_IMAGE }}:cache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.BACKEND_IMAGE }}:cache,mode=max
+          labels: |
+            org.opencontainers.image.source=${{ vars.GITEA_URL }}/${{ env.REPO }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+
+      # ── Frontend image ──
+      - name: Build & push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          target: production
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.FRONTEND_IMAGE }}:${{ steps.meta.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.FRONTEND_IMAGE }}:latest
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.FRONTEND_IMAGE }}:cache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.FRONTEND_IMAGE }}:cache,mode=max
+          labels: |
+            org.opencontainers.image.source=${{ vars.GITEA_URL }}/${{ env.REPO }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+
+  # ─────────────────────────────────────────────
+  # JOB 4 – Desplegar en producción vía SSH
+  # ─────────────────────────────────────────────
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build-and-push-images
+    # Desplegar solo desde main/master o desde un tag de versión
+    if: |
+      github.event_name != 'pull_request' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref_type == 'tag')
+
+    environment:
+      name: production
+      url: ${{ vars.DEPLOY_URL }}
+
+    steps:
+      - name: Checkout (para enviar docker-compose.prod.yml)
+        uses: actions/checkout@v4
+
+      # Preparar clave SSH
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      # Copiar el compose de producción al servidor
+      - name: Copy docker-compose.prod.yml to server
+        run: |
+          scp -i ~/.ssh/deploy_key \
+              -o StrictHostKeyChecking=no \
+              docker-compose.prod.yml \
+              "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/finance-tracker/docker-compose.prod.yml"
+
+      # Ejecutar el despliegue en el servidor remoto
+      - name: Deploy
+        env:
+          VERSION: ${{ needs.build-and-push-images.outputs.version }}
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+              -o StrictHostKeyChecking=no \
+              "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+              bash -s << EOF
+            set -e
+
+            cd ~/finance-tracker
+
+            # Login en el registry desde el servidor de producción
+            echo "${{ secrets.GITEA_TOKEN }}" | \
+              docker login ${{ env.REGISTRY }} \
+                -u "${{ gitea.actor }}" \
+                --password-stdin
+
+            # Actualizar las variables de imagen en el compose
+            export BACKEND_IMAGE="${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.BACKEND_IMAGE }}:${VERSION}"
+            export FRONTEND_IMAGE="${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.FRONTEND_IMAGE }}:${VERSION}"
+            export JWT_SECRET="${{ secrets.JWT_SECRET }}"
+
+            # Descargar las nuevas imágenes y recrear los contenedores
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            # Limpieza de imágenes huérfanas
+            docker image prune -f
+
+            echo "Despliegue completado: versión ${VERSION}"
+          EOF
+
+      # Verificar que el backend responde correctamente
+      - name: Health check
+        run: |
+          sleep 10
+          curl --fail --retry 5 --retry-delay 5 \
+            "${{ vars.DEPLOY_URL }}/api/health" \
+            && echo "Health check OK" \
+            || (echo "Health check FAILED" && exit 1)
+
+      # Limpiar la clave SSH de la máquina del runner
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

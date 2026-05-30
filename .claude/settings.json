@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "finance-tracker": {
+      "command": "npx",
+      "args": ["tsx", "mcp-skill/src/index.ts"],
+      "env": {
+        "FINANCE_TRACKER_URL": "http://localhost:3001/api"
+      }
+    }
+  }
+}
