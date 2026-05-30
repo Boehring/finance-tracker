@@ -1,6 +1,6 @@
 services:
   backend:
-    image: gitea.central.lan/boehring/finance-tracker-backend:latest
+    image: gitea.central.lan/boehring/finance-tracker/finance-tracker-backend:latest
     build:
       context: ./backend
       target: production
@@ -26,7 +26,7 @@ services:
       start_period: 15s
 
   frontend:
-    image: gitea.central.lan/boehring/finance-tracker-frontend:latest
+    image: gitea.central.lan/boehring/finance-tracker/finance-tracker-frontend:latest
     build:
       context: ./frontend
       target: production
