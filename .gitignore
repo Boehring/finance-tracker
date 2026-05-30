@@ -1,5 +1,9 @@
 node_modules
+backend/prisma/*.db
+backend/prisma/*.db-journal
 *.log
+.env
+.env.*
 
 # Output directory
 dist
