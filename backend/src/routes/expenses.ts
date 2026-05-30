@@ -1,8 +1,10 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
+import fs from 'fs';
 import { prisma } from '../index';
 import { AuthRequest, authenticate } from '../middleware/auth';
+import logger from '../utils/logger';
 import dayjs from 'dayjs';
 
 const router = Router();
@@ -20,9 +22,6 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE || '5242880') },
-  fileFilter: (req, file, cb) => {
-    cb(null, true);
-  },
 });
 
 router.use(authenticate);
@@ -74,6 +73,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
     res.json(expenses);
   } catch (error: any) {
+    logger.error('Error fetching expenses', { userId: req.userId, error: error.message });
     res.status(500).json({ error: error.message });
   }
 });
@@ -135,6 +135,7 @@ router.get('/summary', async (req: AuthRequest, res: Response) => {
 
     res.json(grouped);
   } catch (error: any) {
+    logger.error('Error fetching expense summary', { userId: req.userId, period: req.query.period, error: error.message });
     res.status(500).json({ error: error.message });
   }
 });
@@ -154,6 +155,7 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
     if (!expense) return res.status(404).json({ error: 'Expense not found' });
     res.json(expense);
   } catch (error: any) {
+    logger.error('Error fetching expense', { userId: req.userId, expenseId: req.params.id, error: error.message });
     res.status(500).json({ error: error.message });
   }
 });
@@ -195,8 +197,6 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       });
 
       if (participants && participants.length > 0) {
-        let totalCalculated = 0;
-
         if (splitType === 'PERCENTAGE') {
           const totalPercentage = participants.reduce((sum: number, p: any) => sum + parseFloat(p.percentage), 0);
           if (Math.abs(totalPercentage - 100) > 0.01) {
@@ -213,7 +213,6 @@ router.post('/', async (req: AuthRequest, res: Response) => {
                 share,
               },
             });
-            totalCalculated += share;
           }
         } else {
           const totalAmount = participants.reduce((sum: number, p: any) => sum + parseFloat(p.amount), 0);
@@ -230,7 +229,6 @@ router.post('/', async (req: AuthRequest, res: Response) => {
                 share: parseFloat(p.amount),
               },
             });
-            totalCalculated += parseFloat(p.amount);
           }
         }
       }
@@ -248,8 +246,15 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       },
     });
 
+    logger.info('Expense created', {
+      userId: req.userId,
+      expenseId: result.id,
+      amount: parseFloat(amount),
+      title,
+    });
     res.status(201).json(created);
   } catch (error: any) {
+    logger.error('Error creating expense', { userId: req.userId, error: error.message });
     res.status(400).json({ error: error.message });
   }
 });
@@ -275,8 +280,16 @@ router.post('/:id/attachments', upload.single('file'), async (req: AuthRequest, 
       },
     });
 
+    logger.info('Attachment uploaded', {
+      userId: req.userId,
+      expenseId: req.params.id,
+      attachmentId: attachment.id,
+      originalName: req.file.originalname,
+      size: req.file.size,
+    });
     res.status(201).json(attachment);
   } catch (error: any) {
+    logger.error('Error uploading attachment', { userId: req.userId, expenseId: req.params.id, error: error.message });
     res.status(500).json({ error: error.message });
   }
 });
@@ -295,13 +308,18 @@ router.delete('/:expenseId/attachments/:attachmentId', async (req: AuthRequest, 
 
     await prisma.attachment.delete({ where: { id: req.params.attachmentId } });
 
-    const fs = require('fs');
     if (fs.existsSync(attachment.path)) {
       fs.unlinkSync(attachment.path);
     }
 
+    logger.info('Attachment deleted', {
+      userId: req.userId,
+      expenseId: req.params.expenseId,
+      attachmentId: req.params.attachmentId,
+    });
     res.status(204).send();
   } catch (error: any) {
+    logger.error('Error deleting attachment', { userId: req.userId, expenseId: req.params.expenseId, attachmentId: req.params.attachmentId, error: error.message });
     res.status(500).json({ error: error.message });
   }
 });
@@ -371,8 +389,10 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
       },
     });
 
+    logger.info('Expense updated', { userId: req.userId, expenseId: req.params.id, title });
     res.json(result);
   } catch (error: any) {
+    logger.error('Error updating expense', { userId: req.userId, expenseId: req.params.id, error: error.message });
     res.status(400).json({ error: error.message });
   }
 });
@@ -385,8 +405,10 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
     if (!expense) return res.status(404).json({ error: 'Expense not found' });
 
     await prisma.expense.delete({ where: { id: req.params.id } });
+    logger.info('Expense deleted', { userId: req.userId, expenseId: req.params.id, title: expense.title });
     res.status(204).send();
   } catch (error: any) {
+    logger.error('Error deleting expense', { userId: req.userId, expenseId: req.params.id, error: error.message });
     res.status(500).json({ error: error.message });
   }
 });

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../index';
 import { AuthRequest, authenticate } from '../middleware/auth';
+import logger from '../utils/logger';
 import dayjs from 'dayjs';
 
 const router = Router();
@@ -103,8 +104,10 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       }
     }
 
+    logger.info('Debts calculated', { userId: req.userId, peopleCount: people.length, debtsCount: detailedDebts.length });
     res.json({ summary: debts, details: detailedDebts });
   } catch (error: any) {
+    logger.error('Error calculating debts', { userId: req.userId, error: error.message });
     res.status(500).json({ error: error.message });
   }
 });
@@ -150,8 +153,16 @@ router.post('/settle', async (req: AuthRequest, res: Response) => {
       return settlementExpense;
     });
 
+    logger.info('Debt settled', {
+      userId: req.userId,
+      settlementId: result.id,
+      debtor: debtor.name,
+      creditor: creditor.name,
+      amount: parseFloat(amount),
+    });
     res.status(201).json({ message: 'Debt settled successfully', settlement: result });
   } catch (error: any) {
+    logger.error('Error settling debt', { userId: req.userId, error: error.message });
     res.status(400).json({ error: error.message });
   }
 });
