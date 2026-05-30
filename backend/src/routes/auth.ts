@@ -12,16 +12,16 @@ router.post('/register', async (req: Request, res: Response) => {
     const { email, password, name } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const identifier = email.split('@')[0];
+    const existing = await prisma.user.findUnique({ where: { id: identifier } });
     if (existing) {
-      logger.warn('Registration failed: email already exists', { email });
-      return res.status(400).json({ error: 'Email already exists' });
+      logger.warn('Registration failed: identifier already exists', { identifier });
+      return res.status(400).json({ error: 'User already exists' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const identifier = email.split('@')[0];
     const user = await prisma.user.create({
-      data: { email, password: hashedPassword, name },
+      data: { id: identifier, email, password: hashedPassword, name },
     });
 
     await prisma.person.create({
