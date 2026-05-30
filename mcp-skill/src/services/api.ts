@@ -122,6 +122,46 @@ export async function apiCreateExpense(body: {
   return res.data as Expense;
 }
 
+// ── People (write) ────────────────────────────────────────────────────────────
+
+export async function apiCreatePerson(body: {
+  name: string;
+  lastName?: string;
+  identifier?: string;
+}): Promise<Person> {
+  requireAuth();
+  const res = await buildClient().post("/people", body);
+  return res.data as Person;
+}
+
+// ── Categories (write) ────────────────────────────────────────────────────────
+
+export async function apiCreateCategory(body: {
+  name: string;
+  color?: string;
+  icon?: string;
+}): Promise<Category> {
+  requireAuth();
+  const res = await buildClient().post("/categories", body);
+  return res.data as Category;
+}
+
+// ── Context (composite) ───────────────────────────────────────────────────────
+
+export async function apiGetContext(): Promise<{
+  people: Person[];
+  categories: Category[];
+  debts: DebtsResponse;
+}> {
+  requireAuth();
+  const [people, categories, debts] = await Promise.all([
+    apiListPeople(),
+    apiListCategories(),
+    apiGetDebts(),
+  ]);
+  return { people, categories, debts };
+}
+
 // ── Debts ─────────────────────────────────────────────────────────────────────
 
 export async function apiGetDebts(): Promise<DebtsResponse> {
