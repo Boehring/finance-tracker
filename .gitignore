@@ -4,6 +4,7 @@ backend/prisma/*.db-journal
 *.log
 .env
 .env.*
+!.env.*.example
 
 # Output directory
 dist

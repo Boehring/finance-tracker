@@ -39,6 +39,8 @@ app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 
+app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+
 app.use('/api/auth', authRoutes);
 app.use('/api/people', personRoutes);
 app.use('/api/categories', categoryRoutes);
