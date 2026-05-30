@@ -1,0 +1,27 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      target: production
+    volumes:
+      - uploads:/app/uploads
+      - sqlite_data:/app/data
+    environment:
+      DATABASE_URL: file:/app/data/prod.db
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key-change-in-production}
+      PORT: 3001
+      UPLOAD_DIR: ./uploads
+      MAX_FILE_SIZE: 5242880
+
+  frontend:
+    build:
+      context: ./frontend
+      target: production
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  uploads:
+  sqlite_data:

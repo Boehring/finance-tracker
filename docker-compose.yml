@@ -1,0 +1,38 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      target: development
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    environment:
+      DATABASE_URL: file:./dev.db
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key-change-in-production}
+      PORT: 3001
+      UPLOAD_DIR: ./uploads
+      MAX_FILE_SIZE: 5242880
+    ports:
+      - "3001:3001"
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: ./frontend
+      target: development
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      BACKEND_URL: http://backend:3001
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
