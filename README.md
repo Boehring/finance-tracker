@@ -19,6 +19,7 @@ Aplicación para registrar y gestionar gastos compartidos entre diferentes perso
 ## Tecnologías
 
 ### Backend
+
 - **Runtime:** Node.js + Express + TypeScript
 - **ORM:** Prisma (SQLite por defecto, PostgreSQL opcional)
 - **Autenticación:** JWT (jsonwebtoken + bcryptjs)
@@ -26,6 +27,7 @@ Aplicación para registrar y gestionar gastos compartidos entre diferentes perso
 - **Fechas:** dayjs
 
 ### Frontend
+
 - **Framework:** React 18 + TypeScript
 - **Build tool:** Vite 5
 - **Estilos:** Tailwind CSS v4
@@ -34,6 +36,7 @@ Aplicación para registrar y gestionar gastos compartidos entre diferentes perso
 - **HTTP client:** Axios
 
 ### Infraestructura
+
 - **Docker:** Multi-stage builds con Docker Compose
 - **Proxy:** Vite proxy `/api` → backend (`localhost:3001`)
 
@@ -175,23 +178,27 @@ finance-tracker/
 ## API Endpoints
 
 ### Auth
+
 - `POST /api/auth/register` — Registro de usuario
 - `POST /api/auth/login` — Inicio de sesión
 - `GET /api/auth/me` — Obtener usuario actual
 
 ### Personas
+
 - `GET /api/people` — Listar personas
 - `POST /api/people` — Crear persona
 - `PUT /api/people/:id` — Actualizar persona
 - `DELETE /api/people/:id` — Eliminar persona
 
 ### Categorías
+
 - `GET /api/categories` — Listar categorías
 - `POST /api/categories` — Crear categoría
 - `PUT /api/categories/:id` — Actualizar categoría
 - `DELETE /api/categories/:id` — Eliminar categoría
 
 ### Gastos
+
 - `GET /api/expenses` — Listar gastos
 - `GET /api/expenses/summary` — Resumen agrupado por período
 - `GET /api/expenses/:id` — Obtener gasto detalle
@@ -201,6 +208,7 @@ finance-tracker/
 - `POST /api/expenses/:id/attachments` — Adjuntar archivo
 
 ### Deudas
+
 - `GET /api/debts` — Consultar deudas actuales
 - `POST /api/debts/settle` — Registrar liquidación de deuda
 
