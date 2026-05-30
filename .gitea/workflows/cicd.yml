@@ -16,6 +16,8 @@ env:
   REPO: ${{ gitea.repository }}
   BACKEND_IMAGE: finance-tracker-backend
   FRONTEND_IMAGE: finance-tracker-frontend
+  # El runner no confía en el cert self-signed de Gitea; necesario para git fetch
+  GIT_SSL_NO_VERIFY: "true"
 
 # ─────────────────────────────────────────────
 # JOB 1 – Construir el backend (TypeScript → dist/)
