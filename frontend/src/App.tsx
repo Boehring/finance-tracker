@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Expenses from './pages/Expenses';
 import CreateExpense from './pages/CreateExpense';
 import People from './pages/People';
+import PersonView from './pages/PersonView';
 import Categories from './pages/Categories';
 import Debts from './pages/Debts';
 import ExpenseView from './pages/ExpenseView';
@@ -27,6 +28,7 @@ function AppContent() {
           <Route path="/expenses/:id" element={isAuthenticated ? <ExpenseView /> : <Navigate to="/login" />} />
           <Route path="/expenses/:id/edit" element={isAuthenticated ? <CreateExpense /> : <Navigate to="/login" />} />
           <Route path="/people" element={isAuthenticated ? <People /> : <Navigate to="/login" />} />
+          <Route path="/people/:id" element={isAuthenticated ? <PersonView /> : <Navigate to="/login" />} />
           <Route path="/categories" element={isAuthenticated ? <Categories /> : <Navigate to="/login" />} />
           <Route path="/debts" element={isAuthenticated ? <Debts /> : <Navigate to="/login" />} />
         </Routes>
