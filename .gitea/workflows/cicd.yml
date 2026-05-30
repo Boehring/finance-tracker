@@ -181,10 +181,10 @@ jobs:
           push: true
           # Se etiqueta tanto con la versión calculada como con "latest" en main
           tags: |
-            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.BACKEND_IMAGE }}:${{ steps.meta.outputs.version }}
-            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.BACKEND_IMAGE }}:latest
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.BACKEND_IMAGE }}:cache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.BACKEND_IMAGE }}:cache,mode=max
+            ${{ env.REGISTRY }}/${{ gitea.repository }}/${{ env.BACKEND_IMAGE }}:${{ steps.meta.outputs.version }}
+            ${{ env.REGISTRY }}/${{ gitea.repository }}/${{ env.BACKEND_IMAGE }}:latest
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ gitea.repository }}/${{ env.BACKEND_IMAGE }}:cache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ gitea.repository }}/${{ env.BACKEND_IMAGE }}:cache,mode=max
           labels: |
             org.opencontainers.image.source=${{ vars.GITEA_URL }}/${{ env.REPO }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -198,10 +198,10 @@ jobs:
           target: production
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.FRONTEND_IMAGE }}:${{ steps.meta.outputs.version }}
-            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.FRONTEND_IMAGE }}:latest
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.FRONTEND_IMAGE }}:cache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.FRONTEND_IMAGE }}:cache,mode=max
+            ${{ env.REGISTRY }}/${{ gitea.repository }}/${{ env.FRONTEND_IMAGE }}:${{ steps.meta.outputs.version }}
+            ${{ env.REGISTRY }}/${{ gitea.repository }}/${{ env.FRONTEND_IMAGE }}:latest
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ gitea.repository }}/${{ env.FRONTEND_IMAGE }}:cache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ gitea.repository }}/${{ env.FRONTEND_IMAGE }}:cache,mode=max
           labels: |
             org.opencontainers.image.source=${{ vars.GITEA_URL }}/${{ env.REPO }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -266,8 +266,8 @@ jobs:
                 --password-stdin
 
             # Actualizar las variables de imagen en el compose
-            export BACKEND_IMAGE="${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.BACKEND_IMAGE }}:${VERSION}"
-            export FRONTEND_IMAGE="${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.FRONTEND_IMAGE }}:${VERSION}"
+            export BACKEND_IMAGE="${{ env.REGISTRY }}/${{ gitea.repository }}/${{ env.BACKEND_IMAGE }}:${VERSION}"
+            export FRONTEND_IMAGE="${{ env.REGISTRY }}/${{ gitea.repository }}/${{ env.FRONTEND_IMAGE }}:${VERSION}"
             export JWT_SECRET="${{ secrets.JWT_SECRET }}"
 
             # Descargar las nuevas imágenes y recrear los contenedores
