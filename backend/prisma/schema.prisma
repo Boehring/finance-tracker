@@ -3,19 +3,10 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
-enum ExpenseType {
-  EXPENSE
-  SETTLEMENT
-}
-
-enum SplitType {
-  PERCENTAGE
-  AMOUNT
-}
 
 model User {
   id        String   @id @default(cuid())
@@ -67,8 +58,8 @@ model Expense {
   description    String?
   amount         Decimal
   date           DateTime
-  type           ExpenseType   @default(EXPENSE)
-  splitType      SplitType     @default(PERCENTAGE)
+  type           String        @default("EXPENSE")
+  splitType      String        @default("PERCENTAGE")
   categoryId     String?
   payerId        String
   createdById    String
