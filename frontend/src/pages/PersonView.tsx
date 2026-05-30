@@ -25,6 +25,7 @@ interface ChartBucket {
 }
 
 const PERIOD_LABELS: Record<string, string> = {
+  day: 'Día',
   week: 'Semana',
   month: 'Mes',
   year: 'Año',

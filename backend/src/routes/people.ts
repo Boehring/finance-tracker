@@ -189,7 +189,11 @@ router.get('/:id/chart', async (req: AuthRequest, res: Response) => {
     let end: dayjs.Dayjs;
     let buckets: { label: string; start: dayjs.Dayjs; end: dayjs.Dayjs }[] = [];
 
-    if (period === 'week') {
+    if (period === 'day') {
+      start = d.startOf('day');
+      end = d.endOf('day');
+      buckets.push({ label: d.format('DD/MM'), start, end });
+    } else if (period === 'week') {
       start = d.startOf('week');
       end = d.endOf('week');
       const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
