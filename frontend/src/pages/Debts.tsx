@@ -41,7 +41,6 @@ const Debts = () => {
 
   const settleDebt = async (debtorId: string, creditorId: string, amount: number) => {
     if (!confirm(`¿Confirmar que se salda la deuda de ${amount.toFixed(2)}€?`)) return;
-
     try {
       setSettling(true);
       await api.post('/api/debts/settle', {
@@ -60,28 +59,39 @@ const Debts = () => {
   };
 
   return (
-    <div style={styles.container}>
-      <h1 style={styles.title}>Deudas</h1>
+    <div className="max-w-3xl mx-auto px-4 py-8">
+      <h1 className="text-2xl font-semibold text-slate-900 mb-6">Deudas</h1>
 
       {loading ? (
-        <p>Cargando...</p>
+        <div className="text-center text-slate-400 text-sm py-12">Cargando...</div>
       ) : (
-        <>
-          <div style={styles.section}>
-            <h2>Resumen</h2>
+        <div className="space-y-6">
+          <div className="bg-white border border-slate-200 rounded-xl">
+            <div className="px-5 py-4 border-b border-slate-100">
+              <h2 className="font-medium text-slate-900 text-sm">Resumen</h2>
+            </div>
             {summary.length === 0 ? (
-              <p>No hay deudas pendientes</p>
+              <div className="px-5 py-8 text-center text-slate-400 text-sm">No hay deudas pendientes</div>
             ) : (
-              <div style={styles.list}>
+              <div className="divide-y divide-slate-100">
                 {summary.map((debt) => (
-                  <div key={debt.personId} style={styles.summaryItem}>
-                    <strong>{debt.personName}</strong>
-                    <div>
+                  <div key={debt.personId} className="flex items-center justify-between px-5 py-3.5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-sm font-semibold shrink-0">
+                        {debt.personName.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="text-sm font-medium text-slate-800">{debt.personName}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
                       {debt.owes > 0 && (
-                        <span style={styles.owes}>Debe: {debt.owes.toFixed(2)}€</span>
+                        <span className="text-sm font-medium px-3 py-1 bg-rose-50 text-rose-600 rounded-full border border-rose-100">
+                          Debe {debt.owes.toFixed(2)}€
+                        </span>
                       )}
                       {debt.isOwed > 0 && (
-                        <span style={styles.isOwed}>Le deben: {debt.isOwed.toFixed(2)}€</span>
+                        <span className="text-sm font-medium px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100">
+                          Le deben {debt.isOwed.toFixed(2)}€
+                        </span>
                       )}
                     </div>
                   </div>
@@ -90,21 +100,27 @@ const Debts = () => {
             )}
           </div>
 
-          <div style={styles.section}>
-            <h2>Detalle de Deudas</h2>
+          <div className="bg-white border border-slate-200 rounded-xl">
+            <div className="px-5 py-4 border-b border-slate-100">
+              <h2 className="font-medium text-slate-900 text-sm">Detalle de Deudas</h2>
+            </div>
             {details.length === 0 ? (
-              <p>No hay deudas específicas</p>
+              <div className="px-5 py-8 text-center text-slate-400 text-sm">No hay deudas específicas</div>
             ) : (
-              <div style={styles.list}>
+              <div className="divide-y divide-slate-100">
                 {details.map((debt, index) => (
-                  <div key={index} style={styles.detailItem}>
-                    <div>
-                      <strong>{debt.debtorName}</strong> debe <strong>{debt.amount.toFixed(2)}€</strong> a <strong>{debt.creditorName}</strong>
+                  <div key={index} className="flex items-center justify-between px-5 py-4">
+                    <div className="flex items-center gap-2 text-sm text-slate-700">
+                      <span className="font-medium text-slate-900">{debt.debtorName}</span>
+                      <span className="text-slate-400">→</span>
+                      <span className="font-semibold text-rose-600">{debt.amount.toFixed(2)}€</span>
+                      <span className="text-slate-400">→</span>
+                      <span className="font-medium text-slate-900">{debt.creditorName}</span>
                     </div>
                     <button
                       onClick={() => settleDebt(debt.debtorId, debt.creditorId, debt.amount)}
                       disabled={settling}
-                      style={styles.settleBtn}
+                      className="px-3 py-1.5 text-sm font-medium border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
                     >
                       Saldar
                     </button>
@@ -113,66 +129,10 @@ const Debts = () => {
               </div>
             )}
           </div>
-        </>
+        </div>
       )}
     </div>
   );
-};
-
-const styles = {
-  container: {
-    maxWidth: '1000px',
-    margin: '0 auto',
-    padding: '20px',
-  },
-  title: {
-    color: '#2c3e50',
-    marginBottom: '20px',
-  },
-  section: {
-    background: 'white',
-    padding: '20px',
-    borderRadius: '8px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-    marginBottom: '20px',
-  },
-  list: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '10px',
-    marginTop: '15px',
-  },
-  summaryItem: {
-    padding: '15px',
-    background: '#f8f9fa',
-    borderRadius: '4px',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  detailItem: {
-    padding: '15px',
-    background: '#f8f9fa',
-    borderRadius: '4px',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  owes: {
-    color: '#e74c3c',
-    marginRight: '15px',
-  },
-  isOwed: {
-    color: '#2ecc71',
-  },
-  settleBtn: {
-    padding: '8px 16px',
-    background: '#3498db',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-  },
 };
 
 export default Debts;

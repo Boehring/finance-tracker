@@ -7,77 +7,38 @@ const Navbar = () => {
 
   const isActive = (path: string) => location.pathname === path;
 
+  const linkClass = (path: string) =>
+    isActive(path)
+      ? 'text-indigo-600 font-medium text-sm'
+      : 'text-slate-500 hover:text-slate-800 text-sm transition-colors';
+
   return (
-    <nav style={styles.nav}>
-      <div style={styles.container}>
-        <Link to="/" style={styles.brand}>Finance Tracker</Link>
-        <div style={styles.menu}>
-          <Link to="/" style={isActive('/') ? styles.activeLink : styles.link}>Dashboard</Link>
-          <Link to="/expenses" style={isActive('/expenses') ? styles.activeLink : styles.link}>Gastos</Link>
-          <Link to="/people" style={isActive('/people') ? styles.activeLink : styles.link}>Personas</Link>
-          <Link to="/categories" style={isActive('/categories') ? styles.activeLink : styles.link}>Categorías</Link>
-          <Link to="/debts" style={isActive('/debts') ? styles.activeLink : styles.link}>Deudas</Link>
-          <div style={styles.userSection}>
-            <span style={styles.userName}>{user?.name || user?.email}</span>
-            <button onClick={logout} style={styles.logoutBtn}>Salir</button>
-          </div>
+    <nav className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-50">
+      <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+        <Link to="/" className="font-semibold text-indigo-600 text-base tracking-tight">
+          Finance Tracker
+        </Link>
+
+        <div className="flex items-center gap-6">
+          <Link to="/" className={linkClass('/')}>Dashboard</Link>
+          <Link to="/expenses" className={linkClass('/expenses')}>Gastos</Link>
+          <Link to="/people" className={linkClass('/people')}>Personas</Link>
+          <Link to="/categories" className={linkClass('/categories')}>Categorías</Link>
+          <Link to="/debts" className={linkClass('/debts')}>Deudas</Link>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-slate-500">{user?.name || user?.email}</span>
+          <button
+            onClick={logout}
+            className="text-sm text-slate-500 hover:text-slate-800 transition-colors px-3 py-1.5 rounded-lg hover:bg-slate-100"
+          >
+            Salir
+          </button>
         </div>
       </div>
     </nav>
   );
-};
-
-const styles = {
-  nav: {
-    background: '#2c3e50',
-    padding: '0 20px',
-    color: 'white',
-  },
-  container: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    maxWidth: '1200px',
-    margin: '0 auto',
-    height: '60px',
-  },
-  brand: {
-    fontSize: '20px',
-    fontWeight: 'bold' as const,
-    color: 'white',
-  },
-  menu: {
-    display: 'flex',
-    gap: '20px',
-    alignItems: 'center',
-  },
-  link: {
-    color: '#bdc3c7',
-    textDecoration: 'none',
-    padding: '5px 10px',
-  },
-  activeLink: {
-    color: 'white',
-    textDecoration: 'none',
-    padding: '5px 10px',
-    borderBottom: '2px solid #3498db',
-  },
-  userSection: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '15px',
-  },
-  userName: {
-    color: '#ecf0f1',
-  },
-  logoutBtn: {
-    background: '#e74c3c',
-    color: 'white',
-    padding: '8px 15px',
-    borderRadius: '4px',
-    border: 'none',
-    cursor: 'pointer',
-  },
 };
 
 export default Navbar;

@@ -31,7 +31,6 @@ const People = () => {
   const addPerson = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim()) return;
-
     try {
       setError('');
       await api.post('/api/people', { name: newName.trim() });
@@ -53,39 +52,56 @@ const People = () => {
   };
 
   return (
-    <div style={styles.container}>
-      <h1 style={styles.title}>Personas</h1>
+    <div className="max-w-2xl mx-auto px-4 py-8">
+      <h1 className="text-2xl font-semibold text-slate-900 mb-6">Personas</h1>
 
-      <form onSubmit={addPerson} style={styles.form}>
+      <form onSubmit={addPerson} className="flex gap-3 mb-6">
         <input
           type="text"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           placeholder="Nombre de la persona"
-          style={styles.input}
+          className="flex-1 border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
           required
         />
-        <button type="submit" style={styles.addBtn}>Añadir</button>
+        <button
+          type="submit"
+          className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors"
+        >
+          Añadir
+        </button>
       </form>
-      {error && <div style={styles.error}>{error}</div>}
+
+      {error && (
+        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-lg px-4 py-3 mb-4">
+          {error}
+        </div>
+      )}
 
       {loading ? (
-        <p>Cargando...</p>
+        <div className="text-center text-slate-400 text-sm py-8">Cargando...</div>
       ) : people.length === 0 ? (
-        <p>No hay personas registradas</p>
+        <div className="text-center text-slate-400 text-sm py-8 bg-white border border-slate-200 rounded-xl">
+          No hay personas registradas
+        </div>
       ) : (
-        <div style={styles.list}>
+        <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
           {people.map((person) => (
-            <div key={person.id} style={styles.item}>
-              <div style={styles.personInfo}>
-                <strong>{person.name}</strong>
-                <span style={styles.date}>
-                  Creado: {new Date(person.createdAt).toLocaleDateString()}
-                </span>
+            <div key={person.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-slate-50 transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-semibold shrink-0">
+                  {person.name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-slate-800">{person.name}</p>
+                  <p className="text-xs text-slate-400">
+                    Añadido el {new Date(person.createdAt).toLocaleDateString('es-ES')}
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => deletePerson(person.id)}
-                style={styles.deleteBtn}
+                className="text-slate-400 hover:text-rose-500 transition-colors text-sm px-2 py-1 hover:bg-rose-50 rounded-lg"
               >
                 Eliminar
               </button>
@@ -95,76 +111,6 @@ const People = () => {
       )}
     </div>
   );
-};
-
-const styles = {
-  container: {
-    maxWidth: '800px',
-    margin: '0 auto',
-    padding: '20px',
-  },
-  title: {
-    color: '#2c3e50',
-    marginBottom: '20px',
-  },
-  form: {
-    display: 'flex',
-    gap: '10px',
-    marginBottom: '30px',
-  },
-  input: {
-    flex: 1,
-    padding: '10px',
-    border: '1px solid #ddd',
-    borderRadius: '4px',
-    fontSize: '14px',
-  },
-  addBtn: {
-    padding: '10px 20px',
-    background: '#2ecc71',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-  },
-  error: {
-    background: '#e74c3c',
-    color: 'white',
-    padding: '10px',
-    borderRadius: '4px',
-    marginBottom: '20px',
-  },
-  list: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '10px',
-  },
-  item: {
-    background: 'white',
-    padding: '15px 20px',
-    borderRadius: '8px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  personInfo: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '5px',
-  },
-  date: {
-    fontSize: '12px',
-    color: '#95a5a6',
-  },
-  deleteBtn: {
-    padding: '8px 16px',
-    background: '#e74c3c',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-  },
 };
 
 export default People;

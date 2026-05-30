@@ -13,6 +13,13 @@ interface Expense {
   participants: Array<{ person: { id: string; name: string }; share: number }>;
 }
 
+const VIEW_LABELS: Record<string, string> = {
+  day: 'Día',
+  week: 'Semana',
+  month: 'Mes',
+  year: 'Año',
+};
+
 const Expenses = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,10 +44,7 @@ const Expenses = () => {
     }
   };
 
-  const changeView = (newView: string) => {
-    setSearchParams({ view: newView, date });
-  };
-
+  const changeView = (newView: string) => setSearchParams({ view: newView, date });
   const changeDate = (direction: number) => {
     const newDate = dayjs(date).add(direction, view as any).format('YYYY-MM-DD');
     setSearchParams({ view, date: newDate });
@@ -57,63 +61,117 @@ const Expenses = () => {
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <h1>Gastos</h1>
-        <Link to="/expenses/new" style={styles.newBtn}>Nuevo Gasto</Link>
+    <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-semibold text-slate-900">Gastos</h1>
+        <Link
+          to="/expenses/new"
+          className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+        >
+          + Nuevo Gasto
+        </Link>
       </div>
 
-      <div style={styles.controls}>
-        <div style={styles.viewTabs}>
-          {['day', 'week', 'month', 'year'].map((v) => (
+      <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          {Object.entries(VIEW_LABELS).map(([v, label]) => (
             <button
               key={v}
               onClick={() => changeView(v)}
-              style={view === v ? styles.activeTab : styles.tab}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                view === v
+                  ? 'bg-indigo-600 text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
             >
-              {v === 'day' ? 'Día' : v === 'week' ? 'Semana' : v === 'month' ? 'Mes' : 'Año'}
+              {label}
             </button>
           ))}
         </div>
-        <div style={styles.dateNav}>
-          <button onClick={() => changeDate(-1)} style={styles.navBtn}>←</button>
-          <span style={styles.dateDisplay}>{date}</span>
-          <button onClick={() => changeDate(1)} style={styles.navBtn}>→</button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => changeDate(-1)}
+            className="w-8 h-8 flex items-center justify-center rounded-full border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
+          >
+            ←
+          </button>
+          <span className="text-sm font-medium text-slate-700 min-w-[120px] text-center">{date}</span>
+          <button
+            onClick={() => changeDate(1)}
+            className="w-8 h-8 flex items-center justify-center rounded-full border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
+          >
+            →
+          </button>
         </div>
       </div>
 
       {loading ? (
-        <p>Cargando...</p>
+        <div className="text-center text-slate-400 text-sm py-12">Cargando...</div>
       ) : expenses.length === 0 ? (
-        <p>No hay gastos para este período</p>
+        <div className="text-center text-slate-400 text-sm py-12 bg-white border border-slate-200 rounded-xl">
+          No hay gastos para este período
+        </div>
       ) : (
-        <div style={styles.list}>
+        <div className="space-y-3">
           {expenses.map((expense) => (
-            <div key={expense.id} style={styles.item}>
-              <div style={styles.expenseInfo}>
-                <Link to={`/expenses/${expense.id}`} style={styles.title}>
+            <div
+              key={expense.id}
+              className="bg-white border border-slate-200 rounded-xl px-5 py-4 flex items-center justify-between hover:border-slate-300 transition-colors"
+            >
+              <div className="flex-1 min-w-0">
+                <Link
+                  to={`/expenses/${expense.id}`}
+                  className="font-medium text-slate-900 hover:text-indigo-600 transition-colors"
+                >
                   {expense.title}
                 </Link>
-                <div style={styles.meta}>
+                <div className="flex items-center gap-1.5 mt-1">
                   {expense.category?.name && (
-                    <span style={{ color: expense.category.color }}>{expense.category.name}</span>
+                    <>
+                      <span
+                        className="inline-block w-2 h-2 rounded-full"
+                        style={{ background: expense.category.color || '#94a3b8' }}
+                      />
+                      <span className="text-xs text-slate-500">{expense.category.name}</span>
+                      <span className="text-xs text-slate-300">·</span>
+                    </>
                   )}
-                  <span> • {expense.payer.name}</span>
+                  <span className="text-xs text-slate-500">{expense.payer.name}</span>
                 </div>
-                <div style={styles.participants}>
+                <div className="flex items-center gap-1 mt-2">
                   {expense.participants.map((p) => (
-                    <span key={p.person.id} style={styles.participantIcon} title={p.person.name}>
+                    <span
+                      key={p.person.id}
+                      title={p.person.name}
+                      className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center justify-center"
+                    >
                       {p.person.name.charAt(0).toUpperCase()}
                     </span>
                   ))}
                 </div>
               </div>
-              <div style={styles.actions}>
-                <span style={styles.amount}>{expense.amount.toFixed(2)}€</span>
-                <div style={styles.buttons}>
-                  <Link to={`/expenses/${expense.id}`} style={styles.actionBtn}>Ver</Link>
-                  <Link to={`/expenses/${expense.id}/edit`} style={styles.actionBtn}>Editar</Link>
-                  <button onClick={() => deleteExpense(expense.id)} style={styles.deleteBtn}>Eliminar</button>
+
+              <div className="flex items-center gap-4 ml-4 shrink-0">
+                <span className="text-rose-600 font-semibold">{expense.amount.toFixed(2)}€</span>
+                <div className="flex items-center gap-1.5">
+                  <Link
+                    to={`/expenses/${expense.id}`}
+                    className="px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                  >
+                    Ver
+                  </Link>
+                  <Link
+                    to={`/expenses/${expense.id}/edit`}
+                    className="px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                  >
+                    Editar
+                  </Link>
+                  <button
+                    onClick={() => deleteExpense(expense.id)}
+                    className="px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                  >
+                    Eliminar
+                  </button>
                 </div>
               </div>
             </div>
@@ -122,148 +180,6 @@ const Expenses = () => {
       )}
     </div>
   );
-};
-
-const styles = {
-  container: {
-    maxWidth: '1200px',
-    margin: '0 auto',
-    padding: '20px',
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '20px',
-  },
-  newBtn: {
-    background: '#2ecc71',
-    color: 'white',
-    padding: '10px 20px',
-    borderRadius: '4px',
-    textDecoration: 'none',
-  },
-  controls: {
-    background: 'white',
-    padding: '20px',
-    borderRadius: '8px',
-    marginBottom: '20px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-  },
-  viewTabs: {
-    display: 'flex',
-    gap: '10px',
-    marginBottom: '15px',
-  },
-  tab: {
-    padding: '8px 16px',
-    border: '1px solid #ddd',
-    background: 'white',
-    borderRadius: '4px',
-    cursor: 'pointer',
-  },
-  activeTab: {
-    padding: '8px 16px',
-    border: '1px solid #3498db',
-    background: '#3498db',
-    color: 'white',
-    borderRadius: '4px',
-    cursor: 'pointer',
-  },
-  dateNav: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '20px',
-  },
-  navBtn: {
-    padding: '8px 16px',
-    border: '1px solid #ddd',
-    background: 'white',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '16px',
-  },
-  dateDisplay: {
-    fontSize: '16px',
-    fontWeight: 'bold' as const,
-  },
-  list: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '10px',
-  },
-  item: {
-    background: 'white',
-    padding: '20px',
-    borderRadius: '8px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  expenseInfo: {
-    flex: 1,
-  },
-  title: {
-    fontSize: '18px',
-    color: '#2c3e50',
-    textDecoration: 'none',
-    fontWeight: 'bold' as const,
-  },
-  meta: {
-    fontSize: '14px',
-    color: '#7f8c8d',
-    marginTop: '5px',
-  },
-  participants: {
-    display: 'flex',
-    gap: '5px',
-    marginTop: '10px',
-  },
-  participantIcon: {
-    width: '30px',
-    height: '30px',
-    borderRadius: '50%',
-    background: '#3498db',
-    color: 'white',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '12px',
-    fontWeight: 'bold' as const,
-  },
-  actions: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    alignItems: 'flex-end',
-    gap: '10px',
-  },
-  amount: {
-    fontSize: '20px',
-    fontWeight: 'bold' as const,
-    color: '#e74c3c',
-  },
-  buttons: {
-    display: 'flex',
-    gap: '10px',
-  },
-  actionBtn: {
-    padding: '5px 10px',
-    background: '#3498db',
-    color: 'white',
-    borderRadius: '4px',
-    textDecoration: 'none',
-    fontSize: '14px',
-  },
-  deleteBtn: {
-    padding: '5px 10px',
-    background: '#e74c3c',
-    color: 'white',
-    borderRadius: '4px',
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: '14px',
-  },
 };
 
 export default Expenses;

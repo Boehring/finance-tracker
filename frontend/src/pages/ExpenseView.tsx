@@ -58,65 +58,99 @@ const ExpenseView = () => {
     }
   };
 
-  if (loading) return <div style={styles.container}>Cargando...</div>;
-  if (!expense) return <div style={styles.container}>Gasto no encontrado</div>;
+  if (loading) return <div className="max-w-2xl mx-auto px-4 py-12 text-slate-400 text-sm">Cargando...</div>;
+  if (!expense) return <div className="max-w-2xl mx-auto px-4 py-12 text-slate-400 text-sm">Gasto no encontrado</div>;
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <h1>{expense.title}</h1>
-        <div style={styles.actions}>
-          <Link to={`/expenses/${id}/edit`} style={styles.editBtn}>Editar</Link>
-          <button onClick={deleteExpense} style={styles.deleteBtn}>Eliminar</button>
+    <div className="max-w-2xl mx-auto px-4 py-8">
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <Link to="/expenses" className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
+            ← Gastos
+          </Link>
+          <h1 className="text-xl font-semibold text-slate-900 mt-1">{expense.title}</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link
+            to={`/expenses/${id}/edit`}
+            className="px-3 py-1.5 text-sm font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+          >
+            Editar
+          </Link>
+          <button
+            onClick={deleteExpense}
+            className="px-3 py-1.5 text-sm font-medium text-rose-600 border border-rose-200 rounded-lg hover:bg-rose-50 transition-colors"
+          >
+            Eliminar
+          </button>
         </div>
       </div>
 
-      <div style={styles.card}>
-        <div style={styles.amount}>-{expense.amount.toFixed(2)}€</div>
-        <div style={styles.meta}>
-          <p><strong>Fecha:</strong> {new Date(expense.date).toLocaleDateString()}</p>
-          <p><strong>Pagado por:</strong> {expense.payer.name}</p>
+      <div className="bg-white border border-slate-200 rounded-xl p-6 mb-4">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Total</p>
+        <p className="text-4xl font-bold text-rose-600 mb-6">-{expense.amount.toFixed(2)}€</p>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Fecha</p>
+            <p className="text-sm text-slate-800">{new Date(expense.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Pagado por</p>
+            <p className="text-sm text-slate-800">{expense.payer.name}</p>
+          </div>
           {expense.category && (
-            <p><strong>Categoría:</strong> <span style={{ color: expense.category.color }}>{expense.category.name}</span></p>
+            <div>
+              <p className="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Categoría</p>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full inline-block" style={{ background: expense.category.color || '#94a3b8' }} />
+                <span className="text-sm text-slate-800">{expense.category.name}</span>
+              </div>
+            </div>
           )}
           {expense.description && (
-            <p><strong>Descripción:</strong> {expense.description}</p>
+            <div className="col-span-2">
+              <p className="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Descripción</p>
+              <p className="text-sm text-slate-800">{expense.description}</p>
+            </div>
           )}
         </div>
       </div>
 
-      <div style={styles.card}>
-        <h2>Participantes</h2>
-        <div style={styles.participants}>
+      <div className="bg-white border border-slate-200 rounded-xl p-6 mb-4">
+        <h2 className="text-sm font-semibold text-slate-700 mb-4">Participantes</h2>
+        <div className="space-y-2">
           {expense.participants.map((p) => (
-            <div key={p.person.id} style={styles.participant}>
-              <div style={styles.participantIcon}>{p.person.name.charAt(0).toUpperCase()}</div>
-              <div style={styles.participantInfo}>
-                <strong>{p.person.name}</strong>
-                <span>
-                  {p.percentage !== null && p.percentage !== undefined && ` ${p.percentage}%`}
-                  {p.amount !== null && p.amount !== undefined && ` ${p.amount}€`}
-                </span>
+            <div key={p.person.id} className="flex items-center gap-3 py-2">
+              <div className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-semibold shrink-0">
+                {p.person.name.charAt(0).toUpperCase()}
               </div>
-              <div style={styles.share}>{p.share.toFixed(2)}€</div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-slate-800">{p.person.name}</p>
+                <p className="text-xs text-slate-400">
+                  {p.percentage != null ? `${p.percentage}%` : p.amount != null ? `${p.amount}€` : ''}
+                </p>
+              </div>
+              <span className="text-sm font-semibold text-slate-700">{p.share.toFixed(2)}€</span>
             </div>
           ))}
         </div>
       </div>
 
       {expense.attachments.length > 0 && (
-        <div style={styles.card}>
-          <h2>Adjuntos</h2>
-          <div style={styles.attachments}>
+        <div className="bg-white border border-slate-200 rounded-xl p-6">
+          <h2 className="text-sm font-semibold text-slate-700 mb-4">Adjuntos</h2>
+          <div className="flex flex-wrap gap-2">
             {expense.attachments.map((att) => (
               <a
                 key={att.id}
-                href={`/api/uploads/${att.path.split('/').pop()}`}
+                href={`/uploads/${att.path.split('/').pop()}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={styles.attachment}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm rounded-full transition-colors"
               >
-                {att.type === 'image' ? '🖼️' : '📄'} {att.originalName}
+                <span>{att.type === 'image' ? '🖼️' : '📄'}</span>
+                <span>{att.originalName}</span>
               </a>
             ))}
           </div>
@@ -124,106 +158,6 @@ const ExpenseView = () => {
       )}
     </div>
   );
-};
-
-const styles = {
-  container: {
-    maxWidth: '800px',
-    margin: '0 auto',
-    padding: '20px',
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '20px',
-  },
-  actions: {
-    display: 'flex',
-    gap: '10px',
-  },
-  editBtn: {
-    padding: '8px 16px',
-    background: '#3498db',
-    color: 'white',
-    borderRadius: '4px',
-    textDecoration: 'none',
-  },
-  deleteBtn: {
-    padding: '8px 16px',
-    background: '#e74c3c',
-    color: 'white',
-    borderRadius: '4px',
-    border: 'none',
-    cursor: 'pointer',
-  },
-  card: {
-    background: 'white',
-    padding: '20px',
-    borderRadius: '8px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-    marginBottom: '20px',
-  },
-  amount: {
-    fontSize: '32px',
-    fontWeight: 'bold' as const,
-    color: '#e74c3c',
-    marginBottom: '20px',
-  },
-  meta: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '10px',
-    color: '#555',
-  },
-  participants: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '10px',
-  },
-  participant: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '15px',
-    padding: '10px',
-    background: '#f8f9fa',
-    borderRadius: '4px',
-  },
-  participantIcon: {
-    width: '40px',
-    height: '40px',
-    borderRadius: '50%',
-    background: '#3498db',
-    color: 'white',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: 'bold' as const,
-  },
-  participantInfo: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '5px',
-  },
-  share: {
-    fontSize: '18px',
-    fontWeight: 'bold' as const,
-    color: '#2c3e50',
-  },
-  attachments: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '10px',
-  },
-  attachment: {
-    padding: '10px',
-    background: '#f8f9fa',
-    borderRadius: '4px',
-    textDecoration: 'none',
-    color: '#3498db',
-    display: 'block',
-  },
 };
 
 export default ExpenseView;

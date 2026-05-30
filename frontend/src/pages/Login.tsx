@@ -26,108 +26,61 @@ const Login = () => {
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <h2 style={styles.title}>Iniciar Sesión</h2>
-        {error && <div style={styles.error}>{error}</div>}
-        <form onSubmit={handleSubmit} style={styles.form}>
-          <div style={styles.field}>
-            <label style={styles.label}>Email</label>
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 w-full max-w-sm">
+        <div className="mb-8 text-center">
+          <span className="text-indigo-600 font-semibold text-sm tracking-tight">Finance Tracker</span>
+          <h1 className="text-2xl font-semibold text-slate-900 mt-1">Bienvenido de nuevo</h1>
+          <p className="text-slate-500 text-sm mt-1">Inicia sesión en tu cuenta</p>
+        </div>
+
+        {error && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-lg px-4 py-3 mb-6">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">Email</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              style={styles.input}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+              placeholder="tu@email.com"
               required
             />
           </div>
-          <div style={styles.field}>
-            <label style={styles.label}>Contraseña</label>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">Contraseña</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              style={styles.input}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+              placeholder="••••••••"
               required
             />
           </div>
-          <button type="submit" disabled={loading} style={styles.button}>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium rounded-lg py-2.5 text-sm transition-colors mt-2"
+          >
             {loading ? 'Cargando...' : 'Entrar'}
           </button>
         </form>
-        <p style={styles.link}>
-          ¿No tienes cuenta? <Link to="/register">Regístrate</Link>
+
+        <p className="text-center text-sm text-slate-500 mt-6">
+          ¿No tienes cuenta?{' '}
+          <Link to="/register" className="text-indigo-600 hover:text-indigo-700 font-medium">
+            Regístrate
+          </Link>
         </p>
       </div>
     </div>
   );
-};
-
-const styles = {
-  container: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: '100vh',
-    background: '#f5f5f5',
-  },
-  card: {
-    background: 'white',
-    padding: '40px',
-    borderRadius: '8px',
-    boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-    width: '100%',
-    maxWidth: '400px',
-  },
-  title: {
-    textAlign: 'center' as const,
-    marginBottom: '30px',
-    color: '#2c3e50',
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '20px',
-  },
-  field: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '5px',
-  },
-  label: {
-    fontSize: '14px',
-    color: '#555',
-    fontWeight: 'bold' as const,
-  },
-  input: {
-    padding: '10px',
-    border: '1px solid #ddd',
-    borderRadius: '4px',
-    fontSize: '14px',
-  },
-  button: {
-    padding: '12px',
-    background: '#3498db',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    fontSize: '16px',
-    cursor: 'pointer',
-    marginTop: '10px',
-  },
-  error: {
-    background: '#e74c3c',
-    color: 'white',
-    padding: '10px',
-    borderRadius: '4px',
-    marginBottom: '20px',
-    textAlign: 'center' as const,
-  },
-  link: {
-    textAlign: 'center' as const,
-    marginTop: '20px',
-    color: '#555',
-  },
 };
 
 export default Login;

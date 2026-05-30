@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
 
@@ -15,9 +15,24 @@ interface Category {
 
 interface Participant {
   personId: string;
-  percentage?: number;
-  amount?: number;
+  percentage?: string;
+  amount?: string;
 }
+
+const evaluateMath = (expr: string): number | null => {
+  const sanitized = expr.trim();
+  if (!sanitized) return null;
+  if (!/^[\d+\-*/().\s]+$/.test(sanitized)) return null;
+  try {
+    // eslint-disable-next-line no-new-func
+    const result = new Function('return ' + sanitized)();
+    return typeof result === 'number' && isFinite(result) ? result : null;
+  } catch {
+    return null;
+  }
+};
+
+const inputClass = 'w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition bg-white';
 
 const CreateExpense = () => {
   const { id } = useParams();
@@ -31,19 +46,24 @@ const CreateExpense = () => {
   const [categoryId, setCategoryId] = useState('');
   const [payerId, setPayerId] = useState('');
   const [splitType, setSplitType] = useState<'PERCENTAGE' | 'AMOUNT'>('PERCENTAGE');
-  const [participants, setParticipants] = useState<Participant[]>([{ personId: '' }]);
+  const [participants, setParticipants] = useState<Participant[]>([]);
 
   const [people, setPeople] = useState<Person[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
+  const errorRef = useRef<HTMLDivElement>(null);
   const [existingAttachments, setExistingAttachments] = useState<Array<{ id: string; originalName: string }>>([]);
 
   useEffect(() => {
     loadData();
     if (isEdit) loadExpense();
   }, [id]);
+
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [error]);
 
   const loadData = async () => {
     try {
@@ -74,8 +94,8 @@ const CreateExpense = () => {
       setSplitType(expense.splitType);
       setParticipants(expense.participants.map((p: any) => ({
         personId: p.personId,
-        percentage: p.percentage || undefined,
-        amount: p.amount || undefined,
+        percentage: p.percentage != null ? p.percentage.toString() : undefined,
+        amount: p.amount != null ? p.amount.toString() : undefined,
       })));
       setExistingAttachments(expense.attachments || []);
     } catch (error) {
@@ -84,19 +104,13 @@ const CreateExpense = () => {
     }
   };
 
-  const addParticipant = () => {
-    setParticipants([...participants, { personId: '' }]);
-  };
+  const addParticipant = () => setParticipants([...participants, { personId: '' }]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setAttachments([...attachments, ...Array.from(e.target.files)]);
-    }
+    if (e.target.files) setAttachments([...attachments, ...Array.from(e.target.files)]);
   };
 
-  const removeAttachment = (index: number) => {
-    setAttachments(attachments.filter((_, i) => i !== index));
-  };
+  const removeAttachment = (index: number) => setAttachments(attachments.filter((_, i) => i !== index));
 
   const removeExistingAttachment = async (attachmentId: string) => {
     if (!confirm('¿Eliminar este adjunto?')) return;
@@ -114,13 +128,39 @@ const CreateExpense = () => {
     setParticipants(updated);
   };
 
-  const removeParticipant = (index: number) => {
-    setParticipants(participants.filter((_, i) => i !== index));
-  };
+  const removeParticipant = (index: number) => setParticipants(participants.filter((_, i) => i !== index));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (!categoryId) {
+      setError('Debes seleccionar una categoría.');
+      return;
+    }
+
+    const filledParticipants = participants.filter(p => p.personId);
+    if (participants.length > 0 && participants.some(p => !p.personId)) {
+      setError('Selecciona una persona para cada participante o elimina las filas vacías.');
+      return;
+    }
+    if (filledParticipants.length > 0) {
+      if (splitType === 'PERCENTAGE') {
+        const total = filledParticipants.reduce((sum, p) => sum + parseFloat(p.percentage?.toString() || '0'), 0);
+        if (Math.abs(total - 100) > 0.01) {
+          setError(`Los porcentajes deben sumar 100%. Suma actual: ${total.toFixed(2)}%.`);
+          return;
+        }
+      } else {
+        const total = filledParticipants.reduce((sum, p) => sum + parseFloat(p.amount?.toString() || '0'), 0);
+        const expenseAmount = parseFloat(amount);
+        if (!isNaN(expenseAmount) && Math.abs(total - expenseAmount) > 0.01) {
+          setError(`Los importes de los participantes deben sumar ${expenseAmount.toFixed(2)}€. Suma actual: ${total.toFixed(2)}€.`);
+          return;
+        }
+      }
+    }
+
     setLoading(true);
 
     try {
@@ -129,7 +169,7 @@ const CreateExpense = () => {
         description,
         amount: parseFloat(amount),
         date,
-        categoryId: categoryId || null,
+        categoryId,
         payerId,
         splitType,
         participants: participants.filter(p => p.personId).map(p => ({
@@ -167,348 +207,209 @@ const CreateExpense = () => {
   };
 
   return (
-    <div style={styles.container}>
-      <h1 style={styles.title}>{isEdit ? 'Editar Gasto' : 'Nuevo Gasto'}</h1>
-      {error && <div style={styles.error}>{error}</div>}
-      <form onSubmit={handleSubmit} style={styles.form}>
-        <div style={styles.field}>
-          <label style={styles.label}>Título *</label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            style={styles.input}
-            required
-          />
-        </div>
+    <div className="max-w-2xl mx-auto px-4 py-8">
+      <h1 className="text-2xl font-semibold text-slate-900 mb-6">
+        {isEdit ? 'Editar Gasto' : 'Nuevo Gasto'}
+      </h1>
 
-        <div style={styles.field}>
-          <label style={styles.label}>Descripción</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            style={{ ...styles.input, minHeight: '80px' }}
-          />
+      {error && (
+        <div ref={errorRef} className="bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-lg px-4 py-3 mb-6">
+          {error}
         </div>
+      )}
 
-        <div style={styles.row}>
-          <div style={styles.field}>
-            <label style={styles.label}>Importe *</label>
-            <input
-              type="number"
-              step="0.01"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              style={styles.input}
-              required
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Información general</p>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">Título *</label>
+            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} required />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">Descripción</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className={`${inputClass} min-h-[80px] resize-none`}
             />
           </div>
-          <div style={styles.field}>
-            <label style={styles.label}>Fecha *</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              style={styles.input}
-              required
-            />
-          </div>
-        </div>
 
-        <div style={styles.row}>
-          <div style={styles.field}>
-            <label style={styles.label}>Categoría</label>
-            <select
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              style={styles.input}
-            >
-              <option value="">Sin categoría</option>
-              {categories.map(cat => (
-                <option key={cat.id} value={cat.id}>{cat.name}</option>
-              ))}
-            </select>
-          </div>
-          <div style={styles.field}>
-            <label style={styles.label}>Pagado por *</label>
-            <select
-              value={payerId}
-              onChange={(e) => setPayerId(e.target.value)}
-              style={styles.input}
-              required
-            >
-              <option value="">Seleccionar</option>
-              {people.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div style={styles.section}>
-          <div style={styles.sectionHeader}>
-            <h3>Participantes</h3>
-            <button type="button" onClick={addParticipant} style={styles.addBtn}>
-              Añadir
-            </button>
-          </div>
-
-          <div style={styles.splitTypeToggle}>
-            <button
-              type="button"
-              onClick={() => setSplitType('PERCENTAGE')}
-              style={splitType === 'PERCENTAGE' ? styles.activeToggle : styles.toggle}
-            >
-              Porcentaje
-            </button>
-            <button
-              type="button"
-              onClick={() => setSplitType('AMOUNT')}
-              style={splitType === 'AMOUNT' ? styles.activeToggle : styles.toggle}
-            >
-              Importe
-            </button>
-          </div>
-
-          {participants.map((participant, index) => (
-            <div key={index} style={styles.participantRow}>
-              <select
-                value={participant.personId}
-                onChange={(e) => updateParticipant(index, 'personId', e.target.value)}
-                style={styles.input}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700">Importe *</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                onBlur={() => {
+                  const result = evaluateMath(amount);
+                  if (result !== null) setAmount(result.toFixed(2));
+                }}
+                className={inputClass}
+                placeholder="0.00 o 25+15"
                 required
-              >
-                <option value="">Seleccionar persona</option>
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700">Fecha *</label>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} required />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700">Categoría *</label>
+              <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={inputClass} required>
+                <option value="">Seleccionar categoría</option>
+                {categories.map(cat => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700">Pagado por *</label>
+              <select value={payerId} onChange={(e) => setPayerId(e.target.value)} className={inputClass} required>
+                <option value="">Seleccionar</option>
                 {people.map(p => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
-              {splitType === 'PERCENTAGE' ? (
-                <input
-                  type="number"
-                  placeholder="Porcentaje"
-                  value={participant.percentage || ''}
-                  onChange={(e) => updateParticipant(index, 'percentage', e.target.value)}
-                  style={styles.input}
-                />
-              ) : (
-                <input
-                  type="number"
-                  placeholder="Importe"
-                  value={participant.amount || ''}
-                  onChange={(e) => updateParticipant(index, 'amount', e.target.value)}
-                  style={styles.input}
-                />
-              )}
-              {participants.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeParticipant(index)}
-                  style={styles.removeBtn}
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Participantes</p>
+            <button
+              type="button"
+              onClick={addParticipant}
+              className="text-sm text-indigo-600 hover:text-indigo-700 font-medium transition-colors"
+            >
+              + Añadir
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {(['PERCENTAGE', 'AMOUNT'] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setSplitType(t)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  splitType === t ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                {t === 'PERCENTAGE' ? 'Porcentaje' : 'Importe'}
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-2">
+            {participants.map((participant, index) => (
+              <div key={index} className="grid grid-cols-[1fr_auto_auto] gap-2 items-center">
+                <select
+                  value={participant.personId}
+                  onChange={(e) => updateParticipant(index, 'personId', e.target.value)}
+                  className={inputClass}
+                  required
                 >
-                  ×
-                </button>
-              )}
-            </div>
-          ))}
+                  <option value="">Seleccionar persona</option>
+                  {people.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder={splitType === 'PERCENTAGE' ? '%' : '€'}
+                  value={splitType === 'PERCENTAGE' ? (participant.percentage || '') : (participant.amount || '')}
+                  onChange={(e) => updateParticipant(index, splitType === 'PERCENTAGE' ? 'percentage' : 'amount', e.target.value)}
+                  onBlur={() => {
+                    const field = splitType === 'PERCENTAGE' ? 'percentage' : 'amount';
+                    const val = splitType === 'PERCENTAGE' ? participant.percentage : participant.amount;
+                    const result = evaluateMath(val || '');
+                    if (result !== null) updateParticipant(index, field, result.toFixed(2));
+                  }}
+                  className="w-24 border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                />
+                {participants.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeParticipant(index)}
+                    className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-full transition-colors text-lg"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div style={styles.section}>
-          <h3>Adjuntos</h3>
-          <input
-            type="file"
-            multiple
-            onChange={handleFileChange}
-            style={styles.fileInput}
-          />
+        <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Adjuntos</p>
+          <input type="file" multiple onChange={handleFileChange} className="text-sm text-slate-600" />
+
           {attachments.length > 0 && (
-            <div style={styles.fileList}>
-              <p><strong>Archivos nuevos:</strong></p>
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-slate-500">Archivos nuevos</p>
               {attachments.map((file, index) => (
-                <div key={index} style={styles.fileItem}>
-                  <span>{file.name}</span>
-                  <button type="button" onClick={() => removeAttachment(index)} style={styles.removeFileBtn}>×</button>
+                <div key={index} className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg">
+                  <span className="text-sm text-slate-700">{file.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(index)}
+                    className="text-slate-400 hover:text-rose-500 text-lg leading-none transition-colors"
+                  >
+                    ×
+                  </button>
                 </div>
               ))}
             </div>
           )}
+
           {isEdit && existingAttachments.length > 0 && (
-            <div style={styles.fileList}>
-              <p><strong>Archivos existentes:</strong></p>
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-slate-500">Archivos existentes</p>
               {existingAttachments.map((att) => (
-                <div key={att.id} style={styles.fileItem}>
-                  <span>{att.originalName}</span>
-                  <button type="button" onClick={() => removeExistingAttachment(att.id)} style={styles.removeFileBtn}>×</button>
+                <div key={att.id} className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg">
+                  <span className="text-sm text-slate-700">{att.originalName}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeExistingAttachment(att.id)}
+                    className="text-slate-400 hover:text-rose-500 text-lg leading-none transition-colors"
+                  >
+                    ×
+                  </button>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        <div style={styles.actions}>
-          <button type="button" onClick={() => navigate('/expenses')} style={styles.cancelBtn}>
+        <div className="flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={() => navigate('/expenses')}
+            className="px-4 py-2 text-sm font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+          >
             Cancelar
           </button>
-          <button type="submit" disabled={loading} style={styles.saveBtn}>
+          <button
+            type="submit"
+            disabled={loading}
+            className="px-4 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white rounded-lg transition-colors"
+          >
             {loading ? 'Guardando...' : 'Guardar'}
           </button>
         </div>
       </form>
     </div>
   );
-};
-
-const styles = {
-  container: {
-    maxWidth: '800px',
-    margin: '0 auto',
-    padding: '20px',
-  },
-  title: {
-    color: '#2c3e50',
-    marginBottom: '20px',
-  },
-  form: {
-    background: 'white',
-    padding: '30px',
-    borderRadius: '8px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '20px',
-  },
-  field: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '5px',
-    flex: 1,
-  },
-  label: {
-    fontSize: '14px',
-    color: '#555',
-    fontWeight: 'bold' as const,
-  },
-  input: {
-    padding: '10px',
-    border: '1px solid #ddd',
-    borderRadius: '4px',
-    fontSize: '14px',
-  },
-  row: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '20px',
-  },
-  section: {
-    border: '1px solid #eee',
-    padding: '20px',
-    borderRadius: '4px',
-  },
-  sectionHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '15px',
-  },
-  addBtn: {
-    background: '#3498db',
-    color: 'white',
-    padding: '5px 15px',
-    borderRadius: '4px',
-    border: 'none',
-    cursor: 'pointer',
-  },
-  splitTypeToggle: {
-    display: 'flex',
-    gap: '10px',
-    marginBottom: '15px',
-  },
-  toggle: {
-    padding: '8px 16px',
-    border: '1px solid #ddd',
-    background: 'white',
-    borderRadius: '4px',
-    cursor: 'pointer',
-  },
-  activeToggle: {
-    padding: '8px 16px',
-    border: '1px solid #3498db',
-    background: '#3498db',
-    color: 'white',
-    borderRadius: '4px',
-    cursor: 'pointer',
-  },
-  participantRow: {
-    display: 'grid',
-    gridTemplateColumns: '2fr 1fr auto',
-    gap: '10px',
-    marginBottom: '10px',
-    alignItems: 'center',
-  },
-  removeBtn: {
-    background: '#e74c3c',
-    color: 'white',
-    width: '30px',
-    height: '30px',
-    borderRadius: '50%',
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: '16px',
-  },
-  actions: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    gap: '10px',
-    marginTop: '20px',
-  },
-  fileInput: {
-    margin: '10px 0',
-  },
-  fileList: {
-    marginTop: '10px',
-  },
-  fileItem: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '8px',
-    background: '#f8f9fa',
-    borderRadius: '4px',
-    marginBottom: '5px',
-  },
-  removeFileBtn: {
-    background: '#e74c3c',
-    color: 'white',
-    border: 'none',
-    borderRadius: '50%',
-    width: '25px',
-    height: '25px',
-    cursor: 'pointer',
-    fontSize: '14px',
-  },
-  cancelBtn: {
-    padding: '10px 20px',
-    background: '#95a5a6',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-  },
-  saveBtn: {
-    padding: '10px 20px',
-    background: '#2ecc71',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-  },
-  error: {
-    background: '#e74c3c',
-    color: 'white',
-    padding: '10px',
-    borderRadius: '4px',
-    marginBottom: '20px',
-  },
 };
 
 export default CreateExpense;
