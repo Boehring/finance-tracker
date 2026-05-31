@@ -4,6 +4,7 @@ import { Eye, Pencil, Trash2 } from 'lucide-react';
 import api from '../services/api';
 import { logger } from '../utils/logger';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { useAuth } from '../hooks/useAuth';
 
 interface Person {
   id: string;
@@ -11,11 +12,13 @@ interface Person {
   lastName?: string;
   avatarUrl?: string;
   identifier?: string;
+  linkedUserId?: string;
   createdAt: string;
 }
 
 const People = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [people, setPeople] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState('');
@@ -106,13 +109,14 @@ const People = () => {
           {people.map((person) => {
             const initials = (person.name.charAt(0) + (person.lastName?.charAt(0) || '')).toUpperCase();
             const fullName = person.lastName ? `${person.name} ${person.lastName}` : person.name;
+            const isOtherRegisteredUser = !!person.linkedUserId && person.linkedUserId !== user?.id;
             return (
               <div
                 key={person.id}
                 className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-semibold shrink-0 overflow-hidden">
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 overflow-hidden ${isOtherRegisteredUser ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`}>
                     {person.avatarUrl ? (
                       <img src={person.avatarUrl} alt={person.name} className="w-full h-full object-cover" />
                     ) : (
@@ -120,7 +124,14 @@ const People = () => {
                     )}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-800 truncate">{fullName}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-slate-800 truncate">{fullName}</p>
+                      {person.linkedUserId && (
+                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium shrink-0">
+                          Registrado
+                        </span>
+                      )}
+                    </div>
                     {person.identifier && (
                       <p className="text-xs text-slate-400">@{person.identifier}</p>
                     )}
@@ -135,20 +146,24 @@ const People = () => {
                   >
                     <Eye size={15} />
                   </Link>
-                  <button
-                    onClick={() => navigate(`/people/${person.id}?edit=1`)}
-                    className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                    title="Editar"
-                  >
-                    <Pencil size={15} />
-                  </button>
-                  <button
-                    onClick={() => setDeleteTarget({ id: person.id, name: fullName })}
-                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                    title="Eliminar"
-                  >
-                    <Trash2 size={15} />
-                  </button>
+                  {!isOtherRegisteredUser && (
+                    <>
+                      <button
+                        onClick={() => navigate(`/people/${person.id}?edit=1`)}
+                        className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                        title="Editar"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget({ id: person.id, name: fullName })}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                        title="Eliminar"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             );

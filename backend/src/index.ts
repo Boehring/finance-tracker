@@ -49,6 +49,21 @@ app.use('/api/debts', debtRoutes);
 
 app.use(errorHandler);
 
-app.listen(PORT, () => {
+async function backfillLinkedUserIds() {
+  const persons = await prisma.person.findMany({
+    where: { linkedUserId: null },
+    select: { id: true, identifier: true, userId: true },
+  });
+  const toUpdate = persons.filter(p => p.identifier !== null && p.identifier === p.userId);
+  for (const person of toUpdate) {
+    await prisma.person.update({ where: { id: person.id }, data: { linkedUserId: person.userId } });
+  }
+  if (toUpdate.length > 0) {
+    logger.info(`Backfilled linkedUserId for ${toUpdate.length} registered persons`);
+  }
+}
+
+app.listen(PORT, async () => {
   logger.info(`Server started on port ${PORT}`, { env: process.env.NODE_ENV || 'development' });
+  await backfillLinkedUserIds();
 });

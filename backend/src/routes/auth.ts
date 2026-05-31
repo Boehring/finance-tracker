@@ -29,6 +29,7 @@ router.post('/register', async (req: Request, res: Response) => {
         name: name || identifier,
         identifier,
         userId: user.id,
+        linkedUserId: user.id,
       },
     });
 
