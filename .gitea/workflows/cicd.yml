@@ -131,8 +131,6 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "sha_short=${SHA_SHORT}" >> $GITHUB_OUTPUT
 
-      # Instalar el cert self-signed de Gitea en el trust store del sistema y
-      # reiniciar el daemon para que BuildKit (Go TLS) lo recargue en memoria.
       - name: Trust Gitea self-signed certificate
         run: |
           openssl s_client -connect gitea.central.lan:443 -showcerts </dev/null 2>/dev/null \
@@ -142,7 +140,6 @@ jobs:
           sudo mkdir -p /etc/docker/certs.d/gitea.central.lan
           sudo cp /usr/local/share/ca-certificates/gitea-central.crt \
                   /etc/docker/certs.d/gitea.central.lan/ca.crt
-          sudo systemctl restart docker
 
       # Usar driver docker (daemon nativo) para evitar el TLS stack separado de buildkitd
       - name: Set up Docker Buildx
