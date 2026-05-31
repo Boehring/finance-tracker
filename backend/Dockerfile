@@ -1,5 +1,5 @@
 FROM node:20-alpine AS base
-RUN apk add --no-cache tini
+RUN apk add --no-cache tini openssl
 WORKDIR /app
 
 FROM base AS development
