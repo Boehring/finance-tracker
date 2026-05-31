@@ -51,7 +51,7 @@ jobs:
         if: github.event_name != 'pull_request'
         env:
           NODE_TLS_REJECT_UNAUTHORIZED: 0
-          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+          GITEA_TOKEN: ${{ secrets.RUNNER_PACKAGE_TOKEN }}
         run: |
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
             VERSION="${{ github.ref_name }}"
@@ -92,7 +92,7 @@ jobs:
         if: github.event_name != 'pull_request'
         env:
           NODE_TLS_REJECT_UNAUTHORIZED: 0
-          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+          GITEA_TOKEN: ${{ secrets.RUNNER_PACKAGE_TOKEN }}
         run: |
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
             VERSION="${{ github.ref_name }}"
@@ -141,7 +141,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ gitea.actor }}
-          password: ${{ secrets.GITEA_TOKEN }}
+          password: ${{ secrets.RUNNER_PACKAGE_TOKEN }}
 
       # ── Backend image ──
       - name: Build & push backend image
@@ -231,7 +231,7 @@ jobs:
             cd ~/finance-tracker
 
             # Login en el registry desde el servidor de producción
-            echo "${{ secrets.GITEA_TOKEN }}" | \
+            echo "${{ secrets.RUNNER_PACKAGE_TOKEN }}" | \
               docker login ${{ env.REGISTRY }} \
                 -u "${{ gitea.actor }}" \
                 --password-stdin
