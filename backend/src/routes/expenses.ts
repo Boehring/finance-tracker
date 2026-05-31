@@ -178,7 +178,13 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     }
 
     const payer = await prisma.person.findFirst({
-      where: { id: payerId, userId: req.userId },
+      where: {
+        id: payerId,
+        OR: [
+          { userId: req.userId },
+          { linkedUserId: { not: null } },
+        ],
+      },
     });
     if (!payer) return res.status(404).json({ error: 'Payer not found' });
 

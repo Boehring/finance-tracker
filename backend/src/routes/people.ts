@@ -35,7 +35,12 @@ router.use(authenticate);
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const people = await prisma.person.findMany({
-      where: { userId: req.userId },
+      where: {
+        OR: [
+          { userId: req.userId },
+          { linkedUserId: { not: null }, userId: { not: req.userId } },
+        ],
+      },
       orderBy: { name: 'asc' },
     });
     res.json(people);
@@ -48,7 +53,13 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 router.get('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const person = await prisma.person.findFirst({
-      where: { id: req.params.id, userId: req.userId },
+      where: {
+        id: req.params.id,
+        OR: [
+          { userId: req.userId },
+          { linkedUserId: { not: null } },
+        ],
+      },
     });
     if (!person) return res.status(404).json({ error: 'Person not found' });
     res.json(person);
@@ -63,7 +74,9 @@ router.get('/:id/stats', async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const { period = 'all', date } = req.query as { period?: string; date?: string };
 
-    const person = await prisma.person.findFirst({ where: { id, userId: req.userId } });
+    const person = await prisma.person.findFirst({
+      where: { id, OR: [{ userId: req.userId }, { linkedUserId: { not: null } }] },
+    });
     if (!person) return res.status(404).json({ error: 'Person not found' });
 
     let dateFilter: any = {};
@@ -179,7 +192,9 @@ router.get('/:id/chart', async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const { period = 'week', date } = req.query as { period?: string; date?: string };
 
-    const person = await prisma.person.findFirst({ where: { id, userId: req.userId } });
+    const person = await prisma.person.findFirst({
+      where: { id, OR: [{ userId: req.userId }, { linkedUserId: { not: null } }] },
+    });
     if (!person) return res.status(404).json({ error: 'Person not found' });
 
     const d = dayjs(date || dayjs().format('YYYY-MM-DD'));

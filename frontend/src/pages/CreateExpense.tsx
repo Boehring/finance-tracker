@@ -8,6 +8,9 @@ import ConfirmDialog from '../components/ConfirmDialog';
 interface Person {
   id: string;
   name: string;
+  lastName?: string;
+  identifier?: string;
+  linkedUserId?: string;
 }
 
 interface Category {
@@ -35,6 +38,11 @@ const evaluateMath = (expr: string): number | null => {
 };
 
 const inputClass = 'w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition bg-white';
+
+const personLabel = (p: Person) => {
+  const fullName = p.lastName ? `${p.name} ${p.lastName}` : p.name;
+  return p.identifier ? `${fullName} (@${p.identifier})` : fullName;
+};
 
 const CreateExpense = () => {
   const { id } = useParams();
@@ -351,7 +359,7 @@ const CreateExpense = () => {
               <select value={payerId} onChange={(e) => setPayerId(e.target.value)} className={inputClass} required>
                 <option value="">Seleccionar</option>
                 {people.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
+                  <option key={p.id} value={p.id}>{personLabel(p)}</option>
                 ))}
               </select>
             </div>
@@ -396,7 +404,7 @@ const CreateExpense = () => {
                 >
                   <option value="">Seleccionar persona</option>
                   {people.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
+                    <option key={p.id} value={p.id}>{personLabel(p)}</option>
                   ))}
                 </select>
                 <input
