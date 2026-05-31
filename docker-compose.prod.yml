@@ -32,7 +32,7 @@ services:
       target: production
     restart: unless-stopped
     ports:
-      - "8083:80"
+      - "8084:80"
     depends_on:
       backend:
         condition: service_healthy
