@@ -9,9 +9,8 @@ on:
 
 # Variables de entorno globales reutilizadas en todos los jobs
 env:
-  # URL base del registro de Gitea (sin protocolo); configúralo como variable de repositorio
-  # Ejemplo: gitea.midominio.com
-  REGISTRY: ${{ vars.GITEA_REGISTRY }}
+  # Hostname del Container Registry de Gitea (sin protocolo)
+  REGISTRY: gitea.central.lan
   OWNER: ${{ gitea.repository_owner }}
   REPO: ${{ gitea.repository }}
   BACKEND_IMAGE: finance-tracker-backend
@@ -63,7 +62,7 @@ jobs:
       # Subir el artefacto al Package Registry genérico de Gitea
       # Endpoint: PUT <gitea>/api/packages/<owner>/generic/<pkg>/<version>/<file>
       - name: Publish backend artifact to Gitea Package Registry
-        if: github.event_name != 'pull_request' && vars.GITEA_URL != ''
+        if: github.event_name != 'pull_request'
         run: |
           VERSION="${{ github.ref_name }}"
           # Para ramas usar el SHA corto; para tags usar el nombre de la etiqueta
@@ -74,7 +73,7 @@ jobs:
             -H "Authorization: token ${{ secrets.GITEA_TOKEN }}" \
             -H "Content-Type: application/octet-stream" \
             --upload-file ../backend-dist.tar.gz \
-            "${{ vars.GITEA_URL }}/api/packages/${OWNER}/generic/finance-tracker-backend/${VERSION}/backend-dist.tar.gz"
+            "${{ gitea.server_url }}/api/packages/${OWNER}/generic/finance-tracker-backend/${VERSION}/backend-dist.tar.gz"
           echo "ARTIFACT_VERSION=${VERSION}" >> $GITHUB_ENV
 
       - name: Upload artifact (entre jobs)
@@ -116,7 +115,7 @@ jobs:
 
       # Subir al Package Registry genérico de Gitea
       - name: Publish frontend artifact to Gitea Package Registry
-        if: github.event_name != 'pull_request' && vars.GITEA_URL != ''
+        if: github.event_name != 'pull_request'
         run: |
           VERSION="${{ github.ref_name }}"
           if [[ "${{ github.ref_type }}" != "tag" ]]; then
@@ -126,7 +125,7 @@ jobs:
             -H "Authorization: token ${{ secrets.GITEA_TOKEN }}" \
             -H "Content-Type: application/octet-stream" \
             --upload-file ../frontend-dist.tar.gz \
-            "${{ vars.GITEA_URL }}/api/packages/${OWNER}/generic/finance-tracker-frontend/${VERSION}/frontend-dist.tar.gz"
+            "${{ gitea.server_url }}/api/packages/${OWNER}/generic/finance-tracker-frontend/${VERSION}/frontend-dist.tar.gz"
 
       - name: Upload artifact (entre jobs)
         uses: actions/upload-artifact@v4
