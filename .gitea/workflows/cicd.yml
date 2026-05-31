@@ -37,8 +37,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
-          cache-dependency-path: backend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -69,7 +67,7 @@ jobs:
           if [[ "${{ github.ref_type }}" != "tag" ]]; then
             VERSION="dev-$(echo '${{ github.sha }}' | cut -c1-7)"
           fi
-          curl --fail -s \
+          curl --fail -sk \
             -H "Authorization: token ${{ secrets.GITEA_TOKEN }}" \
             -H "Content-Type: application/octet-stream" \
             --upload-file ../backend-dist.tar.gz \
@@ -77,6 +75,7 @@ jobs:
           echo "ARTIFACT_VERSION=${VERSION}" >> $GITHUB_ENV
 
       - name: Upload artifact (entre jobs)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: backend-dist
@@ -101,8 +100,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
-          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -121,13 +118,14 @@ jobs:
           if [[ "${{ github.ref_type }}" != "tag" ]]; then
             VERSION="dev-$(echo '${{ github.sha }}' | cut -c1-7)"
           fi
-          curl --fail -s \
+          curl --fail -sk \
             -H "Authorization: token ${{ secrets.GITEA_TOKEN }}" \
             -H "Content-Type: application/octet-stream" \
             --upload-file ../frontend-dist.tar.gz \
             "${{ gitea.server_url }}/api/packages/${OWNER}/generic/finance-tracker-frontend/${VERSION}/frontend-dist.tar.gz"
 
       - name: Upload artifact (entre jobs)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: frontend-dist
