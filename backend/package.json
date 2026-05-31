@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Backend API for finance tracker app",
   "main": "dist/index.js",
+  "files": ["dist/", "prisma/", "docker-entrypoint.sh"],
   "scripts": {
     "dev": "prisma db push --skip-generate && ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc",

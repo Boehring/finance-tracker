@@ -47,42 +47,20 @@ jobs:
       - name: Type-check & compile
         run: npm run build
 
-      # Empaquetar el artefacto compilado
-      - name: Create backend tarball
-        run: |
-          tar -czf ../backend-dist.tar.gz \
-            dist/ \
-            prisma/ \
-            package.json \
-            package-lock.json \
-            docker-entrypoint.sh
-
-      # Subir el artefacto al Package Registry genérico de Gitea
-      # Endpoint: PUT <gitea>/api/packages/<owner>/generic/<pkg>/<version>/<file>
-      - name: Publish backend artifact to Gitea Package Registry
+      - name: Publish to Gitea npm registry
         if: github.event_name != 'pull_request'
-        run: |
-          VERSION="${{ github.ref_name }}"
-          # Para ramas usar el SHA corto; para tags usar el nombre de la etiqueta
-          if [[ "${{ github.ref_type }}" != "tag" ]]; then
-            VERSION="dev-$(echo '${{ github.sha }}' | cut -c1-7)"
-          fi
-          curl --fail -sk \
-            -H "Authorization: token ${{ secrets.GITEA_TOKEN }}" \
-            -H "Content-Type: application/octet-stream" \
-            --upload-file ../backend-dist.tar.gz \
-            "${GITHUB_SERVER_URL}/api/packages/${GITHUB_REPOSITORY_OWNER}/generic/finance-tracker-backend/${VERSION}/backend-dist.tar.gz"
-          echo "ARTIFACT_VERSION=${VERSION}" >> $GITHUB_ENV
-
-      - name: Upload artifact (entre jobs)
-        if: always()
         env:
           NODE_TLS_REJECT_UNAUTHORIZED: 0
-        uses: actions/upload-artifact@v3
-        with:
-          name: backend-dist
-          path: backend-dist.tar.gz
-          retention-days: 1
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="0.0.0-dev.$(echo '${{ github.sha }}' | cut -c1-7)"
+          fi
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          echo "//gitea.central.lan/api/packages/${GITHUB_REPOSITORY_OWNER}/npm/:_authToken=${GITEA_TOKEN}" >> ~/.npmrc
+          npm publish --registry "https://gitea.central.lan/api/packages/${GITHUB_REPOSITORY_OWNER}/npm/"
 
   # ─────────────────────────────────────────────
   # JOB 2 – Construir el frontend (Vite → dist/)
@@ -109,32 +87,20 @@ jobs:
       - name: Type-check & build
         run: npm run build
 
-      - name: Create frontend tarball
-        run: tar -czf ../frontend-dist.tar.gz dist/ nginx.conf
-
-      # Subir al Package Registry genérico de Gitea
-      - name: Publish frontend artifact to Gitea Package Registry
+      - name: Publish to Gitea npm registry
         if: github.event_name != 'pull_request'
-        run: |
-          VERSION="${{ github.ref_name }}"
-          if [[ "${{ github.ref_type }}" != "tag" ]]; then
-            VERSION="dev-$(echo '${{ github.sha }}' | cut -c1-7)"
-          fi
-          curl --fail -sk \
-            -H "Authorization: token ${{ secrets.GITEA_TOKEN }}" \
-            -H "Content-Type: application/octet-stream" \
-            --upload-file ../frontend-dist.tar.gz \
-            "${GITHUB_SERVER_URL}/api/packages/${GITHUB_REPOSITORY_OWNER}/generic/finance-tracker-frontend/${VERSION}/frontend-dist.tar.gz"
-
-      - name: Upload artifact (entre jobs)
-        if: always()
         env:
           NODE_TLS_REJECT_UNAUTHORIZED: 0
-        uses: actions/upload-artifact@v3
-        with:
-          name: frontend-dist
-          path: frontend-dist.tar.gz
-          retention-days: 1
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="0.0.0-dev.$(echo '${{ github.sha }}' | cut -c1-7)"
+          fi
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          echo "//gitea.central.lan/api/packages/${GITHUB_REPOSITORY_OWNER}/npm/:_authToken=${GITEA_TOKEN}" >> ~/.npmrc
+          npm publish --registry "https://gitea.central.lan/api/packages/${GITHUB_REPOSITORY_OWNER}/npm/"
 
   # ─────────────────────────────────────────────
   # JOB 3 – Construir y publicar imágenes Docker
