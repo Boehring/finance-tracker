@@ -134,6 +134,10 @@ jobs:
       # Habilitar buildx para caché y multi-plataforma
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          config-inline: |
+            [registry."gitea.central.lan"]
+              insecure = true
 
       # Login en el Container Registry de Gitea (compatible con OCI/Docker)
       - name: Login to Gitea Container Registry
