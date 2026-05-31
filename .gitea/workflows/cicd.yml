@@ -131,13 +131,20 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "sha_short=${SHA_SHORT}" >> $GITHUB_OUTPUT
 
-      # Habilitar buildx para caché y multi-plataforma
+      # Instalar el cert self-signed de Gitea para que Docker daemon lo confíe
+      # (docker driver usa el daemon directamente, sin buildkitd container separado)
+      - name: Trust Gitea self-signed certificate
+        run: |
+          sudo mkdir -p /etc/docker/certs.d/gitea.central.lan
+          openssl s_client -connect gitea.central.lan:443 -showcerts </dev/null 2>/dev/null \
+            | sed -n '/-----BEGIN CERTIFICATE-----/,/-----END CERTIFICATE-----/p' \
+            | sudo tee /etc/docker/certs.d/gitea.central.lan/ca.crt > /dev/null
+
+      # Usar driver docker (daemon nativo) para evitar el TLS stack separado de buildkitd
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
-          config-inline: |
-            [registry."gitea.central.lan"]
-              insecure = true
+          driver: docker
 
       # Login en el Container Registry de Gitea (compatible con OCI/Docker)
       - name: Login to Gitea Container Registry
@@ -158,8 +165,6 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ gitea.repository }}/${{ env.BACKEND_IMAGE }}:${{ steps.meta.outputs.version }}
             ${{ env.REGISTRY }}/${{ gitea.repository }}/${{ env.BACKEND_IMAGE }}:latest
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ gitea.repository }}/${{ env.BACKEND_IMAGE }}:cache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ gitea.repository }}/${{ env.BACKEND_IMAGE }}:cache,mode=max
           labels: |
             org.opencontainers.image.source=${{ vars.GITEA_URL }}/${{ env.REPO }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -175,8 +180,6 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ gitea.repository }}/${{ env.FRONTEND_IMAGE }}:${{ steps.meta.outputs.version }}
             ${{ env.REGISTRY }}/${{ gitea.repository }}/${{ env.FRONTEND_IMAGE }}:latest
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ gitea.repository }}/${{ env.FRONTEND_IMAGE }}:cache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ gitea.repository }}/${{ env.FRONTEND_IMAGE }}:cache,mode=max
           labels: |
             org.opencontainers.image.source=${{ vars.GITEA_URL }}/${{ env.REPO }}
             org.opencontainers.image.revision=${{ github.sha }}
