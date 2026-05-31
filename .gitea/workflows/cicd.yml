@@ -63,7 +63,7 @@ jobs:
       # Subir el artefacto al Package Registry genérico de Gitea
       # Endpoint: PUT <gitea>/api/packages/<owner>/generic/<pkg>/<version>/<file>
       - name: Publish backend artifact to Gitea Package Registry
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && vars.GITEA_URL != ''
         run: |
           VERSION="${{ github.ref_name }}"
           # Para ramas usar el SHA corto; para tags usar el nombre de la etiqueta
@@ -116,7 +116,7 @@ jobs:
 
       # Subir al Package Registry genérico de Gitea
       - name: Publish frontend artifact to Gitea Package Registry
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && vars.GITEA_URL != ''
         run: |
           VERSION="${{ github.ref_name }}"
           if [[ "${{ github.ref_type }}" != "tag" ]]; then
