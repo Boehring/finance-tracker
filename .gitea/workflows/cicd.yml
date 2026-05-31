@@ -76,6 +76,8 @@ jobs:
 
       - name: Upload artifact (entre jobs)
         if: always()
+        env:
+          NODE_TLS_REJECT_UNAUTHORIZED: 0
         uses: actions/upload-artifact@v3
         with:
           name: backend-dist
@@ -126,6 +128,8 @@ jobs:
 
       - name: Upload artifact (entre jobs)
         if: always()
+        env:
+          NODE_TLS_REJECT_UNAUTHORIZED: 0
         uses: actions/upload-artifact@v3
         with:
           name: frontend-dist
