@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { prisma } from '../index';
 import { AuthRequest, authenticate } from '../middleware/auth';
 import logger from '../utils/logger';
@@ -14,133 +14,97 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       where: { userId: req.userId },
     });
 
-    const debts: any[] = [];
-
-    for (const person of people) {
-      const expensesAsPayer = await prisma.expense.findMany({
-        where: {
-          payerId: person.id,
-          type: 'EXPENSE',
-        },
-        include: {
-          participants: { include: { person: true } },
-        },
-      });
-
-      const paidForOthers = expensesAsPayer.reduce((acc, expense) => {
-        const payerParticipation = expense.participants.find(p => p.personId === person.id);
-        const payerShare = payerParticipation ? parseFloat(payerParticipation.share.toString()) : 0;
-        return acc + (parseFloat(expense.amount.toString()) - payerShare);
-      }, 0);
-
-      const participations = await prisma.expenseParticipant.findMany({
-        where: {
-          personId: person.id,
-          expense: {
-            type: 'EXPENSE',
-          },
-        },
-        include: {
-          expense: { include: { payer: true } },
-        },
-      });
-
-      const owesToOthers = participations.reduce((acc, part) => {
-        if (part.expense.payerId !== person.id) {
-          return acc + parseFloat(part.share.toString());
-        }
-        return acc;
-      }, 0);
-
-      const netDebt = owesToOthers - paidForOthers;
-
-      if (netDebt !== 0) {
-        debts.push({
-          personId: person.id,
-          personName: person.name,
-          owes: netDebt > 0 ? netDebt : 0,
-          isOwed: netDebt < 0 ? Math.abs(netDebt) : 0,
-          netDebt,
-        });
-      }
-    }
-
-    const detailedDebts: any[] = [];
-
-    for (const person of people) {
-      const participations = await prisma.expenseParticipant.findMany({
-        where: {
-          personId: person.id,
-          expense: {
-            type: 'EXPENSE',
-          },
-        },
-        include: {
-          expense: { include: { payer: true } },
-        },
-      });
-
-      for (const part of participations) {
-        if (part.expense.payerId !== person.id) {
-          const existing = detailedDebts.find(
-            d => d.debtorId === person.id && d.creditorId === part.expense.payerId
-          );
-
-          if (existing) {
-            existing.amount += parseFloat(part.share.toString());
-          } else {
-            detailedDebts.push({
-              debtorId: person.id,
-              debtorName: person.name,
-              creditorId: part.expense.payerId,
-              creditorName: part.expense.payer.name,
-              amount: parseFloat(part.share.toString()),
-            });
-          }
-        }
-      }
-    }
-
-    // Monthly breakdown: get all months with expenses, then group debts by month
-    const allExpenses = await prisma.expense.findMany({
-      where: { createdById: req.userId!, type: 'EXPENSE' },
-      select: { date: true },
+    // Phase 1: load all expense participations
+    const expenseParticipations = await prisma.expenseParticipant.findMany({
+      where: { expense: { createdById: req.userId!, type: 'EXPENSE' } },
+      include: {
+        expense: { include: { payer: { select: { id: true, name: true } } } },
+        person: { select: { id: true, name: true } },
+      },
     });
-    const monthlyDetailsMap: Record<string, any[]> = {};
-    for (const e of allExpenses) {
-      const month = dayjs(e.date).format('YYYY-MM');
-      if (!monthlyDetailsMap[month]) monthlyDetailsMap[month] = [];
+
+    // Phase 2: load all settlement participations
+    const settlementParticipations = await prisma.expenseParticipant.findMany({
+      where: { expense: { createdById: req.userId!, type: 'SETTLEMENT' } },
+      include: { expense: { select: { payerId: true } } },
+    });
+
+    // Build directional flow matrix: flow[debtorId][creditorId] = gross amount
+    const flow: Record<string, Record<string, number>> = {};
+    const addFlow = (from: string, to: string, amount: number) => {
+      if (!flow[from]) flow[from] = {};
+      flow[from][to] = (flow[from][to] ?? 0) + amount;
+    };
+
+    for (const part of expenseParticipations) {
+      // Participant is not the payer → participant owes payer their share
+      if (part.person.id !== part.expense.payer.id) {
+        addFlow(part.person.id, part.expense.payer.id, parseFloat(part.share.toString()));
+      }
     }
 
-    for (const person of people) {
-      const participations = await prisma.expenseParticipant.findMany({
-        where: {
-          personId: person.id,
-          expense: { type: 'EXPENSE' },
-        },
-        include: {
-          expense: { include: { payer: true } },
-        },
-      });
+    for (const settlement of settlementParticipations) {
+      // Settlement: payer=debtor, participant=creditor → reduces debtor→creditor flow
+      addFlow(settlement.expense.payerId, settlement.personId, -parseFloat(settlement.share.toString()));
+    }
 
-      for (const part of participations) {
-        if (part.expense.payerId !== person.id) {
-          const month = dayjs(part.expense.date).format('YYYY-MM');
-          if (!monthlyDetailsMap[month]) monthlyDetailsMap[month] = [];
-          const existing = monthlyDetailsMap[month].find(
-            (d: any) => d.debtorId === person.id && d.creditorId === part.expense.payerId
-          );
-          if (existing) {
-            existing.amount += parseFloat(part.share.toString());
-          } else {
-            monthlyDetailsMap[month].push({
-              debtorId: person.id,
-              debtorName: person.name,
-              creditorId: part.expense.payerId,
-              creditorName: part.expense.payer.name,
-              amount: parseFloat(part.share.toString()),
-            });
-          }
+    // Phase 3: net opposing flows per pair → final debts
+    const detailedDebts: {
+      debtorId: string;
+      debtorName: string;
+      creditorId: string;
+      creditorName: string;
+      amount: number;
+    }[] = [];
+
+    for (let i = 0; i < people.length; i++) {
+      for (let j = i + 1; j < people.length; j++) {
+        const personA = people[i];
+        const personB = people[j];
+
+        const AowesB = flow[personA.id]?.[personB.id] ?? 0;
+        const BowesA = flow[personB.id]?.[personA.id] ?? 0;
+        const net = AowesB - BowesA;
+
+        if (net > 0.005) {
+          detailedDebts.push({ debtorId: personA.id, debtorName: personA.name, creditorId: personB.id, creditorName: personB.name, amount: net });
+        } else if (net < -0.005) {
+          detailedDebts.push({ debtorId: personB.id, debtorName: personB.name, creditorId: personA.id, creditorName: personA.name, amount: -net });
+        }
+      }
+    }
+
+    // Derive summary directly from netted debts for consistency
+    const summaryMap: Record<string, { personId: string; personName: string; owes: number; isOwed: number }> = {};
+    for (const debt of detailedDebts) {
+      if (!summaryMap[debt.debtorId]) summaryMap[debt.debtorId] = { personId: debt.debtorId, personName: debt.debtorName, owes: 0, isOwed: 0 };
+      if (!summaryMap[debt.creditorId]) summaryMap[debt.creditorId] = { personId: debt.creditorId, personName: debt.creditorName, owes: 0, isOwed: 0 };
+      summaryMap[debt.debtorId].owes += debt.amount;
+      summaryMap[debt.creditorId].isOwed += debt.amount;
+    }
+    const summary = Object.values(summaryMap).map(s => ({ ...s, netDebt: s.owes - s.isOwed }));
+
+    // Monthly breakdown: gross debts per month (no cross-month netting)
+    const monthlyDetailsMap: Record<string, { debtorId: string; debtorName: string; creditorId: string; creditorName: string; amount: number }[]> = {};
+
+    for (const part of expenseParticipations) {
+      if (part.person.id !== part.expense.payer.id) {
+        const month = dayjs(part.expense.date).format('YYYY-MM');
+        if (!monthlyDetailsMap[month]) monthlyDetailsMap[month] = [];
+        const share = parseFloat(part.share.toString());
+        const existing = monthlyDetailsMap[month].find(
+          d => d.debtorId === part.person.id && d.creditorId === part.expense.payer.id
+        );
+        if (existing) {
+          existing.amount += share;
+        } else {
+          monthlyDetailsMap[month].push({
+            debtorId: part.person.id,
+            debtorName: part.person.name,
+            creditorId: part.expense.payer.id,
+            creditorName: part.expense.payer.name,
+            amount: share,
+          });
         }
       }
     }
@@ -150,7 +114,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       .sort((a, b) => b.month.localeCompare(a.month));
 
     logger.info('Debts calculated', { userId: req.userId, peopleCount: people.length, debtsCount: detailedDebts.length });
-    res.json({ summary: debts, details: detailedDebts, monthlyDetails });
+    res.json({ summary, details: detailedDebts, monthlyDetails });
   } catch (error: any) {
     logger.error('Error calculating debts', { userId: req.userId, error: error.message });
     res.status(500).json({ error: error.message });
