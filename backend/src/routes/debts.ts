@@ -10,22 +10,56 @@ router.use(authenticate);
 
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
-    const people = await prisma.person.findMany({
+    // Find all persons belonging to this user (to scope which expenses are "mine")
+    const myPersons = await prisma.person.findMany({
       where: { userId: req.userId },
+      select: { id: true },
     });
+    const myPersonIds = myPersons.map(p => p.id);
 
-    // Phase 1: load all expense participations
+    // Phase 1: load all expense participations for expenses involving this user's persons
+    // Includes expenses created by the user OR where their persons are payer/participant
     const expenseParticipations = await prisma.expenseParticipant.findMany({
-      where: { expense: { createdById: req.userId!, type: 'EXPENSE' } },
+      where: {
+        expense: {
+          type: 'EXPENSE',
+          OR: [
+            { createdById: req.userId! },
+            ...(myPersonIds.length > 0 ? [
+              { payerId: { in: myPersonIds } },
+              { participants: { some: { personId: { in: myPersonIds } } } },
+            ] : []),
+          ],
+        },
+      },
       include: {
         expense: { include: { payer: { select: { id: true, name: true } } } },
         person: { select: { id: true, name: true } },
       },
     });
 
-    // Phase 2: load all settlement participations
+    // Derive people from participations (all involved persons, not just user-owned ones)
+    const peopleMap: Record<string, { id: string; name: string }> = {};
+    for (const part of expenseParticipations) {
+      if (!peopleMap[part.person.id]) peopleMap[part.person.id] = part.person;
+      if (!peopleMap[part.expense.payer.id]) peopleMap[part.expense.payer.id] = part.expense.payer;
+    }
+    const people = Object.values(peopleMap);
+
+    // Phase 2: load all settlement participations for settlements involving this user's persons
     const settlementParticipations = await prisma.expenseParticipant.findMany({
-      where: { expense: { createdById: req.userId!, type: 'SETTLEMENT' } },
+      where: {
+        expense: {
+          type: 'SETTLEMENT',
+          OR: [
+            { createdById: req.userId! },
+            ...(myPersonIds.length > 0 ? [
+              { payerId: { in: myPersonIds } },
+              { participants: { some: { personId: { in: myPersonIds } } } },
+            ] : []),
+          ],
+        },
+      },
       include: { expense: { select: { payerId: true } } },
     });
 
