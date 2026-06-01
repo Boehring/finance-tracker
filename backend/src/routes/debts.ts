@@ -20,7 +20,6 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       const expensesAsPayer = await prisma.expense.findMany({
         where: {
           payerId: person.id,
-          createdById: req.userId,
           type: 'EXPENSE',
         },
         include: {
@@ -38,7 +37,6 @@ router.get('/', async (req: AuthRequest, res: Response) => {
         where: {
           personId: person.id,
           expense: {
-            createdById: req.userId,
             type: 'EXPENSE',
           },
         },
@@ -74,7 +72,6 @@ router.get('/', async (req: AuthRequest, res: Response) => {
         where: {
           personId: person.id,
           expense: {
-            createdById: req.userId,
             type: 'EXPENSE',
           },
         },
