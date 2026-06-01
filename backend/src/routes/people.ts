@@ -107,7 +107,7 @@ router.get('/:id/stats', async (req: AuthRequest, res: Response) => {
       dateFilter = { date: { gte: start, lte: end } };
     }
 
-    const baseExpenseWhere = { type: 'EXPENSE', createdById: req.userId, ...dateFilter };
+    const baseExpenseWhere = { type: 'EXPENSE', ...dateFilter };
 
     const [totalPaidResult, owedResult, paidForResult] = await Promise.all([
       prisma.expense.aggregate({
@@ -241,7 +241,7 @@ router.get('/:id/chart', async (req: AuthRequest, res: Response) => {
     } else {
       // all — group by year from first expense to current year
       const firstExpense = await prisma.expense.findFirst({
-        where: { createdById: req.userId, type: 'EXPENSE' },
+        where: { type: 'EXPENSE' },
         orderBy: { date: 'asc' },
         select: { date: true },
       });
@@ -260,7 +260,6 @@ router.get('/:id/chart', async (req: AuthRequest, res: Response) => {
       where: {
         payerId: id,
         type: 'EXPENSE',
-        createdById: req.userId,
         date: { gte: start.toDate(), lte: end.toDate() },
       },
       include: { participants: true },
@@ -273,7 +272,6 @@ router.get('/:id/chart', async (req: AuthRequest, res: Response) => {
         expense: {
           payerId: { not: id },
           type: 'EXPENSE',
-          createdById: req.userId,
           date: { gte: start.toDate(), lte: end.toDate() },
         },
       },

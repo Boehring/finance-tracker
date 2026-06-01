@@ -29,7 +29,7 @@ router.use(authenticate);
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const { period, date } = req.query;
-    let where: any = { createdBy: { id: req.userId } };
+    let where: any = {};
 
     if (period && date) {
       const d = dayjs(date as string);
@@ -114,7 +114,6 @@ router.get('/summary', async (req: AuthRequest, res: Response) => {
 
     const expenses = await prisma.expense.findMany({
       where: {
-        createdById: req.userId,
         date: { gte: start, lte: end },
       },
       include: {
@@ -143,7 +142,7 @@ router.get('/summary', async (req: AuthRequest, res: Response) => {
 router.get('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const expense = await prisma.expense.findFirst({
-      where: { id: req.params.id, createdById: req.userId },
+      where: { id: req.params.id },
       include: {
         category: true,
         payer: true,
