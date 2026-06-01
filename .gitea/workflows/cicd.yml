@@ -223,7 +223,7 @@ jobs:
           scp -i ~/.ssh/deploy_key \
               -o StrictHostKeyChecking=no \
               docker-compose.prod.yml \
-              "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/finance-tracker/docker-compose.prod.yml"
+              "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/projects/finance-tracker/docker-compose.prod.yml"
 
       # Ejecutar el despliegue en el servidor remoto
       - name: Deploy
@@ -236,7 +236,7 @@ jobs:
               bash -s << EOF
             set -e
 
-            cd ~/finance-tracker
+            cd ~/projects/finance-tracker
 
             # Login en el registry desde el servidor de producción
             echo "${{ secrets.RUNNER_PACKAGE_TOKEN }}" | \
@@ -250,8 +250,8 @@ jobs:
             export JWT_SECRET="${{ secrets.JWT_SECRET }}"
 
             # Descargar las nuevas imágenes y recrear los contenedores
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            docker compose -f docker-compose.prod.yml --env-file .env pull
+            docker compose -f docker-compose.prod.yml --env-file .env up -d --remove-orphans
 
             # Limpieza de imágenes huérfanas
             docker image prune -f
