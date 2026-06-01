@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Eye, Pencil, Trash2 } from 'lucide-react';
+import { Eye, Pencil, Trash2, FileDown } from 'lucide-react';
 import api from '../services/api';
 import { logger } from '../utils/logger';
 import dayjs from 'dayjs';
 import ConfirmDialog from '../components/ConfirmDialog';
+
+const MONTHS_ES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+];
 
 interface Expense {
   id: string;
@@ -67,16 +72,45 @@ const Expenses = () => {
     }
   };
 
+  const handleExport = async () => {
+    try {
+      const response = await api.get(`/api/expenses/export?date=${date}`, { responseType: 'blob' });
+      const month = dayjs(date).month();
+      const year = dayjs(date).year();
+      const filename = `gastos_${MONTHS_ES[month].toLowerCase()}_${year}.xlsx`;
+      const url = URL.createObjectURL(response.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      logger.error('Error exporting expenses', { date, error });
+    }
+  };
+
+  const exportMonthLabel = MONTHS_ES[dayjs(date).month()];
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold text-slate-900">Gastos</h1>
-        <Link
-          to="/expenses/new"
-          className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-        >
-          + Nuevo Gasto
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            title={`Exportar gastos de ${exportMonthLabel}`}
+          >
+            <FileDown size={15} />
+            Exportar {exportMonthLabel}
+          </button>
+          <Link
+            to="/expenses/new"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          >
+            + Nuevo Gasto
+          </Link>
+        </div>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6">

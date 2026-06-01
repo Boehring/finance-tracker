@@ -2,10 +2,12 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import ExcelJS from 'exceljs';
 import { prisma } from '../index';
 import { AuthRequest, authenticate } from '../middleware/auth';
 import logger from '../utils/logger';
 import dayjs from 'dayjs';
+import 'dayjs/locale/es';
 
 const router = Router();
 
@@ -135,6 +137,97 @@ router.get('/summary', async (req: AuthRequest, res: Response) => {
     res.json(grouped);
   } catch (error: any) {
     logger.error('Error fetching expense summary', { userId: req.userId, period: req.query.period, error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/export', async (req: AuthRequest, res: Response) => {
+  try {
+    const { date } = req.query;
+    const d = dayjs(date as string || undefined).locale('es');
+    const start = d.startOf('month').toDate();
+    const end = d.endOf('month').toDate();
+    const monthLabel = d.format('MMMM YYYY');
+
+    const expenses = await prisma.expense.findMany({
+      where: { date: { gte: start, lte: end } },
+      include: {
+        category: true,
+        payer: true,
+        participants: { include: { person: true } },
+      },
+      orderBy: { date: 'asc' },
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Finance Tracker';
+    workbook.created = new Date();
+
+    const sheet = workbook.addWorksheet(`Gastos ${monthLabel}`);
+
+    sheet.columns = [
+      { header: 'Fecha', key: 'date', width: 14 },
+      { header: 'Descripción', key: 'title', width: 32 },
+      { header: 'Importe (€)', key: 'amount', width: 14 },
+      { header: 'Categoría', key: 'category', width: 18 },
+      { header: 'Pagador', key: 'payer', width: 16 },
+      { header: 'Participantes', key: 'participants', width: 30 },
+      { header: 'Tipo de división', key: 'splitType', width: 18 },
+    ];
+
+    // Header row styling
+    const headerRow = sheet.getRow(1);
+    headerRow.eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    });
+    headerRow.height = 22;
+
+    for (const exp of expenses) {
+      const participantNames = exp.participants
+        .map((p) => `${p.person.name} (${Number(p.share).toFixed(2)}€)`)
+        .join(', ');
+
+      const row = sheet.addRow({
+        date: dayjs(exp.date).format('DD/MM/YYYY'),
+        title: exp.title,
+        amount: Number(exp.amount),
+        category: exp.category?.name || '',
+        payer: exp.payer.name,
+        participants: participantNames,
+        splitType: exp.splitType === 'PERCENTAGE' ? 'Porcentaje' : 'Importe fijo',
+      });
+
+      row.getCell('amount').numFmt = '#,##0.00 "€"';
+      row.getCell('amount').alignment = { horizontal: 'right' };
+    }
+
+    // Total row
+    const totalRow = sheet.addRow({
+      date: '',
+      title: 'TOTAL',
+      amount: expenses.reduce((sum, e) => sum + Number(e.amount), 0),
+      category: '',
+      payer: '',
+      participants: '',
+      splitType: '',
+    });
+    totalRow.getCell('title').font = { bold: true };
+    totalRow.getCell('amount').numFmt = '#,##0.00 "€"';
+    totalRow.getCell('amount').font = { bold: true };
+    totalRow.getCell('amount').alignment = { horizontal: 'right' };
+
+    const safeMonth = d.format('YYYY-MM');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="gastos_${safeMonth}.xlsx"`);
+
+    await workbook.xlsx.write(res);
+    res.end();
+
+    logger.info('Expenses exported', { userId: req.userId, month: safeMonth, count: expenses.length });
+  } catch (error: any) {
+    logger.error('Error exporting expenses', { userId: req.userId, error: error.message });
     res.status(500).json({ error: error.message });
   }
 });
