@@ -280,6 +280,11 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     });
     if (!payer) return res.status(404).json({ error: 'Payer not found' });
 
+    if (categoryId) {
+      const category = await prisma.category.findUnique({ where: { id: categoryId } });
+      if (!category) return res.status(400).json({ error: 'Category not found' });
+    }
+
     const result = await prisma.$transaction(async (prisma) => {
       const expense = await prisma.expense.create({
         data: {
@@ -430,6 +435,11 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
     if (!expense) return res.status(404).json({ error: 'Expense not found' });
 
     const { title, description, amount, date, categoryId, payerId, splitType, participants } = req.body;
+
+    if (categoryId) {
+      const category = await prisma.category.findUnique({ where: { id: categoryId } });
+      if (!category) return res.status(400).json({ error: 'Category not found' });
+    }
 
     const updated = await prisma.$transaction(async (prisma) => {
       const updatedExpense = await prisma.expense.update({

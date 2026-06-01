@@ -7,5 +7,17 @@
         "FINANCE_TRACKER_URL": "http://localhost:3001/api"
       }
     }
+  },
+  "permissions": {
+    "allow": [
+      "mcp__finance-tracker__finance_get_context",
+      "mcp__finance-tracker__finance_get_debts",
+      "mcp__finance-tracker__finance_list_expenses",
+      "mcp__finance-tracker__finance_list_people",
+      "mcp__openclaw__web_fetch",
+      "mcp__openclaw__memory_get",
+      "mcp__openclaw__memory_search",
+      "mcp__openclaw__session_status"
+    ]
   }
 }

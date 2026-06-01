@@ -10,7 +10,6 @@ router.use(authenticate);
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const categories = await prisma.category.findMany({
-      where: { userId: req.userId },
       orderBy: { name: 'asc' },
     });
     res.json(categories);
