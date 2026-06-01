@@ -101,8 +101,56 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Monthly breakdown: get all months with expenses, then group debts by month
+    const allExpenses = await prisma.expense.findMany({
+      where: { createdById: req.userId!, type: 'EXPENSE' },
+      select: { date: true },
+    });
+    const monthlyDetailsMap: Record<string, any[]> = {};
+    for (const e of allExpenses) {
+      const month = dayjs(e.date).format('YYYY-MM');
+      if (!monthlyDetailsMap[month]) monthlyDetailsMap[month] = [];
+    }
+
+    for (const person of people) {
+      const participations = await prisma.expenseParticipant.findMany({
+        where: {
+          personId: person.id,
+          expense: { type: 'EXPENSE' },
+        },
+        include: {
+          expense: { include: { payer: true } },
+        },
+      });
+
+      for (const part of participations) {
+        if (part.expense.payerId !== person.id) {
+          const month = dayjs(part.expense.date).format('YYYY-MM');
+          if (!monthlyDetailsMap[month]) monthlyDetailsMap[month] = [];
+          const existing = monthlyDetailsMap[month].find(
+            (d: any) => d.debtorId === person.id && d.creditorId === part.expense.payerId
+          );
+          if (existing) {
+            existing.amount += parseFloat(part.share.toString());
+          } else {
+            monthlyDetailsMap[month].push({
+              debtorId: person.id,
+              debtorName: person.name,
+              creditorId: part.expense.payerId,
+              creditorName: part.expense.payer.name,
+              amount: parseFloat(part.share.toString()),
+            });
+          }
+        }
+      }
+    }
+
+    const monthlyDetails = Object.entries(monthlyDetailsMap)
+      .map(([month, debts]) => ({ month, debts }))
+      .sort((a, b) => b.month.localeCompare(a.month));
+
     logger.info('Debts calculated', { userId: req.userId, peopleCount: people.length, debtsCount: detailedDebts.length });
-    res.json({ summary: debts, details: detailedDebts });
+    res.json({ summary: debts, details: detailedDebts, monthlyDetails });
   } catch (error: any) {
     logger.error('Error calculating debts', { userId: req.userId, error: error.message });
     res.status(500).json({ error: error.message });

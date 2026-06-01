@@ -184,14 +184,16 @@ const Expenses = () => {
                   {expense.participants.length > 0 && (
                     <>
                       <span className="text-xs text-slate-300">·</span>
-                      <div className="flex items-center gap-0.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         {expense.participants.map((p) => (
-                          <span
-                            key={p.person.id}
-                            title={p.person.name}
-                            className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center justify-center"
-                          >
-                            {p.person.name.charAt(0).toUpperCase()}
+                          <span key={p.person.id} className="flex items-center gap-0.5">
+                            <span
+                              title={p.person.name}
+                              className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center justify-center shrink-0"
+                            >
+                              {p.person.name.charAt(0).toUpperCase()}
+                            </span>
+                            <span className="text-xs text-slate-600">{Number(p.share).toFixed(2)}€</span>
                           </span>
                         ))}
                       </div>
