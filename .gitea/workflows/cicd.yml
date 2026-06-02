@@ -218,7 +218,7 @@ jobs:
           ssh-keyscan -H "${{ secrets.DEPLOY_HOST_DASSAULT }}" >> ~/.ssh/known_hosts 2>/dev/null
 
       # Copiar el compose de producción al servidor
-      # - name: Copy docker-compose.prod.yml to server
+      - name: Copy docker-compose.prod.yml to server
         run: |
           scp -i ~/.ssh/deploy_key \
               -o StrictHostKeyChecking=no \
