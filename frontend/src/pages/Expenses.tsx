@@ -4,6 +4,8 @@ import { Eye, Pencil, Trash2, FileDown } from 'lucide-react';
 import api from '../services/api';
 import { logger } from '../utils/logger';
 import dayjs from 'dayjs';
+import 'dayjs/locale/es';
+dayjs.locale('es');
 import ConfirmDialog from '../components/ConfirmDialog';
 
 const MONTHS_ES = [
@@ -167,6 +169,8 @@ const Expenses = () => {
                   {expense.title}
                 </Link>
                 <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                  <span className="text-xs text-slate-400">{dayjs(expense.date).format('D MMM')}</span>
+                  <span className="text-xs text-slate-300">·</span>
                   {expense.category?.name && (
                     <>
                       {expense.category.icon && (
