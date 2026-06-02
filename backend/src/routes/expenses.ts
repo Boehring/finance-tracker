@@ -285,6 +285,22 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       if (!category) return res.status(400).json({ error: 'Category not found' });
     }
 
+    if (participants && participants.length > 0) {
+      const personIds: string[] = participants.map((p: any) => p.personId);
+      const accessible = await prisma.person.findMany({
+        where: {
+          id: { in: personIds },
+          OR: [{ userId: req.userId }, { linkedUserId: { not: null } }],
+        },
+        select: { id: true },
+      });
+      const accessibleIds = new Set(accessible.map((p) => p.id));
+      const invalid = personIds.filter((id) => !accessibleIds.has(id));
+      if (invalid.length > 0) {
+        return res.status(400).json({ error: `Invalid or inaccessible participant IDs: ${invalid.join(', ')}` });
+      }
+    }
+
     const result = await prisma.$transaction(async (prisma) => {
       const expense = await prisma.expense.create({
         data: {
@@ -365,7 +381,13 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 router.post('/:id/attachments', upload.single('file'), async (req: AuthRequest, res: Response) => {
   try {
     const expense = await prisma.expense.findFirst({
-      where: { id: req.params.id, createdById: req.userId },
+      where: {
+        id: req.params.id,
+        OR: [
+          { createdById: req.userId },
+          { payer: { userId: req.userId } },
+        ],
+      },
     });
     if (!expense) return res.status(404).json({ error: 'Expense not found' });
 
@@ -400,7 +422,13 @@ router.post('/:id/attachments', upload.single('file'), async (req: AuthRequest, 
 router.delete('/:expenseId/attachments/:attachmentId', async (req: AuthRequest, res: Response) => {
   try {
     const expense = await prisma.expense.findFirst({
-      where: { id: req.params.expenseId, createdById: req.userId },
+      where: {
+        id: req.params.expenseId,
+        OR: [
+          { createdById: req.userId },
+          { payer: { userId: req.userId } },
+        ],
+      },
     });
     if (!expense) return res.status(404).json({ error: 'Expense not found' });
 
@@ -430,7 +458,13 @@ router.delete('/:expenseId/attachments/:attachmentId', async (req: AuthRequest, 
 router.put('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const expense = await prisma.expense.findFirst({
-      where: { id: req.params.id, createdById: req.userId },
+      where: {
+        id: req.params.id,
+        OR: [
+          { createdById: req.userId },
+          { payer: { userId: req.userId } },
+        ],
+      },
     });
     if (!expense) return res.status(404).json({ error: 'Expense not found' });
 
@@ -439,6 +473,38 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
     if (categoryId) {
       const category = await prisma.category.findUnique({ where: { id: categoryId } });
       if (!category) return res.status(400).json({ error: 'Category not found' });
+    }
+
+    if (participants && participants.length > 0) {
+      const personIds: string[] = participants.map((p: any) => p.personId);
+      const accessible = await prisma.person.findMany({
+        where: {
+          id: { in: personIds },
+          OR: [{ userId: req.userId }, { linkedUserId: { not: null } }],
+        },
+        select: { id: true },
+      });
+      const accessibleIds = new Set(accessible.map((p) => p.id));
+      const invalid = personIds.filter((id) => !accessibleIds.has(id));
+      if (invalid.length > 0) {
+        return res.status(400).json({ error: `Invalid or inaccessible participant IDs: ${invalid.join(', ')}` });
+      }
+    }
+
+    if (participants && participants.length > 0) {
+      const effectiveSplitType = splitType || expense.splitType;
+      if (effectiveSplitType === 'PERCENTAGE') {
+        const totalPercentage = participants.reduce((sum: number, p: any) => sum + parseFloat(p.percentage), 0);
+        if (Math.abs(totalPercentage - 100) > 0.01) {
+          return res.status(400).json({ error: 'Percentages must sum to 100' });
+        }
+      } else {
+        const effectiveAmount = amount ? parseFloat(amount) : parseFloat(expense.amount.toString());
+        const totalAmount = participants.reduce((sum: number, p: any) => sum + parseFloat(p.amount), 0);
+        if (Math.abs(totalAmount - effectiveAmount) > 0.01) {
+          return res.status(400).json({ error: 'Amounts must sum to total expense' });
+        }
+      }
     }
 
     const updated = await prisma.$transaction(async (prisma) => {
@@ -458,7 +524,7 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
       if (participants) {
         await prisma.expenseParticipant.deleteMany({ where: { expenseId: req.params.id } });
 
-        if (splitType === 'PERCENTAGE') {
+        if ((splitType || expense.splitType) === 'PERCENTAGE') {
           for (const p of participants) {
             const share = (parseFloat(amount || expense.amount.toString()) * parseFloat(p.percentage)) / 100;
             await prisma.expenseParticipant.create({
@@ -508,7 +574,13 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const expense = await prisma.expense.findFirst({
-      where: { id: req.params.id, createdById: req.userId },
+      where: {
+        id: req.params.id,
+        OR: [
+          { createdById: req.userId },
+          { payer: { userId: req.userId } },
+        ],
+      },
     });
     if (!expense) return res.status(404).json({ error: 'Expense not found' });
 
