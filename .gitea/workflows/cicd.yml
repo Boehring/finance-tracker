@@ -215,7 +215,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST_DASSAULT }}" >> ~/.ssh/known_hosts 2>/dev/null
 
       # Copiar el compose de producción al servidor
       # - name: Copy docker-compose.prod.yml to server
@@ -224,7 +224,7 @@ jobs:
               -o StrictHostKeyChecking=no \
               -v \
               docker-compose.prod.yml \
-              "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/projects/finance-tracker/docker-compose.prod.yml"
+              "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST_DASSAULT }}:~/projects/finance-tracker/docker-compose.prod.yml"
 
       # Ejecutar el despliegue en el servidor remoto
       - name: Deploy
@@ -234,7 +234,7 @@ jobs:
           ssh -i ~/.ssh/deploy_key \
               -o StrictHostKeyChecking=no \
               -v \
-              "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+              "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST_DASSAULT }}" \
               bash -s << EOF
             set -e
 
