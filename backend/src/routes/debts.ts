@@ -10,15 +10,12 @@ router.use(authenticate);
 
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
-    // Find all persons belonging to this user (to scope which expenses are "mine")
     const myPersons = await prisma.person.findMany({
       where: { userId: req.userId },
       select: { id: true },
     });
     const myPersonIds = myPersons.map(p => p.id);
 
-    // Phase 1: load all expense participations for expenses involving this user's persons
-    // Includes expenses created by the user OR where their persons are payer/participant
     const expenseParticipations = await prisma.expenseParticipant.findMany({
       where: {
         expense: {
@@ -38,7 +35,6 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       },
     });
 
-    // Derive people from participations (all involved persons, not just user-owned ones)
     const peopleMap: Record<string, { id: string; name: string }> = {};
     for (const part of expenseParticipations) {
       if (!peopleMap[part.person.id]) peopleMap[part.person.id] = part.person;
@@ -46,7 +42,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     }
     const people = Object.values(peopleMap);
 
-    // Phase 2: load all settlement participations for settlements involving this user's persons
+    // Load all settlements, including date for monthly grouping
     const settlementParticipations = await prisma.expenseParticipant.findMany({
       where: {
         expense: {
@@ -60,10 +56,10 @@ router.get('/', async (req: AuthRequest, res: Response) => {
           ],
         },
       },
-      include: { expense: { select: { payerId: true } } },
+      include: { expense: { select: { payerId: true, date: true } } },
     });
 
-    // Build directional flow matrix: flow[debtorId][creditorId] = gross amount
+    // Build global directional flow matrix
     const flow: Record<string, Record<string, number>> = {};
     const addFlow = (from: string, to: string, amount: number) => {
       if (!flow[from]) flow[from] = {};
@@ -71,44 +67,34 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     };
 
     for (const part of expenseParticipations) {
-      // Participant is not the payer → participant owes payer their share
       if (part.person.id !== part.expense.payer.id) {
         addFlow(part.person.id, part.expense.payer.id, parseFloat(part.share.toString()));
       }
     }
-
     for (const settlement of settlementParticipations) {
-      // Settlement: payer=debtor, participant=creditor → reduces debtor→creditor flow
       addFlow(settlement.expense.payerId, settlement.personId, -parseFloat(settlement.share.toString()));
     }
 
-    // Phase 3: net opposing flows per pair → final debts
+    // Net global debts
     const detailedDebts: {
-      debtorId: string;
-      debtorName: string;
-      creditorId: string;
-      creditorName: string;
-      amount: number;
+      debtorId: string; debtorName: string; creditorId: string; creditorName: string; amount: number;
     }[] = [];
 
     for (let i = 0; i < people.length; i++) {
       for (let j = i + 1; j < people.length; j++) {
-        const personA = people[i];
-        const personB = people[j];
-
-        const AowesB = flow[personA.id]?.[personB.id] ?? 0;
-        const BowesA = flow[personB.id]?.[personA.id] ?? 0;
+        const pA = people[i];
+        const pB = people[j];
+        const AowesB = flow[pA.id]?.[pB.id] ?? 0;
+        const BowesA = flow[pB.id]?.[pA.id] ?? 0;
         const net = AowesB - BowesA;
-
         if (net > 0.005) {
-          detailedDebts.push({ debtorId: personA.id, debtorName: personA.name, creditorId: personB.id, creditorName: personB.name, amount: net });
+          detailedDebts.push({ debtorId: pA.id, debtorName: pA.name, creditorId: pB.id, creditorName: pB.name, amount: net });
         } else if (net < -0.005) {
-          detailedDebts.push({ debtorId: personB.id, debtorName: personB.name, creditorId: personA.id, creditorName: personA.name, amount: -net });
+          detailedDebts.push({ debtorId: pB.id, debtorName: pB.name, creditorId: pA.id, creditorName: pA.name, amount: -net });
         }
       }
     }
 
-    // Derive summary directly from netted debts for consistency
     const summaryMap: Record<string, { personId: string; personName: string; owes: number; isOwed: number }> = {};
     for (const debt of detailedDebts) {
       if (!summaryMap[debt.debtorId]) summaryMap[debt.debtorId] = { personId: debt.debtorId, personName: debt.debtorName, owes: 0, isOwed: 0 };
@@ -118,33 +104,70 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     }
     const summary = Object.values(summaryMap).map(s => ({ ...s, netDebt: s.owes - s.isOwed }));
 
-    // Monthly breakdown: gross debts per month (no cross-month netting)
-    const monthlyDetailsMap: Record<string, { debtorId: string; debtorName: string; creditorId: string; creditorName: string; amount: number }[]> = {};
-
+    // Monthly breakdown: gross expense debts per month netted with settlements dated in that month
+    // expenseFlow[month][debtor][creditor] = amount
+    const expenseFlow: Record<string, Record<string, Record<string, number>>> = {};
     for (const part of expenseParticipations) {
       if (part.person.id !== part.expense.payer.id) {
         const month = dayjs(part.expense.date).format('YYYY-MM');
-        if (!monthlyDetailsMap[month]) monthlyDetailsMap[month] = [];
-        const share = parseFloat(part.share.toString());
-        const existing = monthlyDetailsMap[month].find(
-          d => d.debtorId === part.person.id && d.creditorId === part.expense.payer.id
-        );
-        if (existing) {
-          existing.amount += share;
-        } else {
-          monthlyDetailsMap[month].push({
-            debtorId: part.person.id,
-            debtorName: part.person.name,
-            creditorId: part.expense.payer.id,
-            creditorName: part.expense.payer.name,
-            amount: share,
-          });
-        }
+        if (!expenseFlow[month]) expenseFlow[month] = {};
+        const from = part.person.id;
+        const to = part.expense.payer.id;
+        if (!expenseFlow[month][from]) expenseFlow[month][from] = {};
+        expenseFlow[month][from][to] = (expenseFlow[month][from][to] ?? 0) + parseFloat(part.share.toString());
       }
     }
 
-    const monthlyDetails = Object.entries(monthlyDetailsMap)
-      .map(([month, debts]) => ({ month, debts }))
+    // settleFlow[month][debtor][creditor] = amount (settlements grouped by their date month)
+    const settleFlow: Record<string, Record<string, Record<string, number>>> = {};
+    for (const settlement of settlementParticipations) {
+      const month = dayjs(settlement.expense.date).format('YYYY-MM');
+      if (!settleFlow[month]) settleFlow[month] = {};
+      const from = settlement.expense.payerId;
+      const to = settlement.personId;
+      if (!settleFlow[month][from]) settleFlow[month][from] = {};
+      settleFlow[month][from][to] = (settleFlow[month][from][to] ?? 0) + parseFloat(settlement.share.toString());
+    }
+
+    // For each expense-month, net with same-month settlements and build monthly debts
+    const monthlyDetails = Object.entries(expenseFlow)
+      .map(([month, mExpFlow]) => {
+        const mSettleFlow = settleFlow[month] ?? {};
+
+        const monthPeople = new Set<string>();
+        for (const [from, tos] of Object.entries(mExpFlow)) {
+          monthPeople.add(from);
+          for (const to of Object.keys(tos)) monthPeople.add(to);
+        }
+        const monthPeopleArr = Array.from(monthPeople);
+
+        const debts: { debtorId: string; debtorName: string; creditorId: string; creditorName: string; amount: number }[] = [];
+
+        for (let i = 0; i < monthPeopleArr.length; i++) {
+          for (let j = i + 1; j < monthPeopleArr.length; j++) {
+            const pA = monthPeopleArr[i];
+            const pB = monthPeopleArr[j];
+
+            const AowesBExp = mExpFlow[pA]?.[pB] ?? 0;
+            const BowesAExp = mExpFlow[pB]?.[pA] ?? 0;
+            const AowesBSettle = mSettleFlow[pA]?.[pB] ?? 0;
+            const BowesASettle = mSettleFlow[pB]?.[pA] ?? 0;
+
+            const net = (AowesBExp - AowesBSettle) - (BowesAExp - BowesASettle);
+
+            const nameA = peopleMap[pA]?.name ?? pA;
+            const nameB = peopleMap[pB]?.name ?? pB;
+
+            if (net > 0.005) {
+              debts.push({ debtorId: pA, debtorName: nameA, creditorId: pB, creditorName: nameB, amount: net });
+            } else if (net < -0.005) {
+              debts.push({ debtorId: pB, debtorName: nameB, creditorId: pA, creditorName: nameA, amount: -net });
+            }
+          }
+        }
+
+        return { month, debts };
+      })
       .sort((a, b) => b.month.localeCompare(a.month));
 
     logger.info('Debts calculated', { userId: req.userId, peopleCount: people.length, debtsCount: detailedDebts.length });
@@ -157,7 +180,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
 router.post('/settle', async (req: AuthRequest, res: Response) => {
   try {
-    const { debtorId, creditorId, amount, date } = req.body;
+    const { debtorId, creditorId, amount, date, month } = req.body;
 
     if (!debtorId || !creditorId || !amount) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -173,12 +196,74 @@ router.post('/settle', async (req: AuthRequest, res: Response) => {
     });
     if (!creditor) return res.status(404).json({ error: 'Creditor not found' });
 
+    // When month is provided, validate against that month's net debt only
+    let monthDateFilter: { gte: Date; lte: Date } | undefined;
+    if (month && /^\d{4}-\d{2}$/.test(month)) {
+      monthDateFilter = {
+        gte: dayjs(month + '-01').startOf('month').toDate(),
+        lte: dayjs(month + '-01').endOf('month').toDate(),
+      };
+    }
+
+    const [expParts, settleParts] = await Promise.all([
+      prisma.expenseParticipant.findMany({
+        where: {
+          expense: {
+            type: 'EXPENSE',
+            payerId: { in: [debtorId, creditorId] },
+            ...(monthDateFilter ? { date: monthDateFilter } : {}),
+          },
+          personId: { in: [debtorId, creditorId] },
+        },
+        include: { expense: { select: { payerId: true } } },
+      }),
+      prisma.expenseParticipant.findMany({
+        where: {
+          expense: {
+            type: 'SETTLEMENT',
+            payerId: { in: [debtorId, creditorId] },
+            ...(monthDateFilter ? { date: monthDateFilter } : {}),
+          },
+          personId: { in: [debtorId, creditorId] },
+        },
+        include: { expense: { select: { payerId: true } } },
+      }),
+    ]);
+
+    let debtorToCreditor = 0;
+    let creditorToDebtor = 0;
+    for (const p of expParts) {
+      if (p.personId !== p.expense.payerId) {
+        if (p.personId === debtorId) debtorToCreditor += parseFloat(p.share.toString());
+        else creditorToDebtor += parseFloat(p.share.toString());
+      }
+    }
+    for (const s of settleParts) {
+      if (s.expense.payerId === debtorId && s.personId === creditorId)
+        debtorToCreditor -= parseFloat(s.share.toString());
+      else if (s.expense.payerId === creditorId && s.personId === debtorId)
+        creditorToDebtor -= parseFloat(s.share.toString());
+    }
+    const netDebt = debtorToCreditor - creditorToDebtor;
+    if (parseFloat(amount) > netDebt + 0.01) {
+      return res.status(400).json({
+        error: `Settlement amount exceeds current net debt of ${Math.max(0, netDebt).toFixed(2)}`,
+      });
+    }
+
+    // Date: explicit > end-of-month (when month provided) > today
+    const settlementDate = date
+      ? new Date(date)
+      : month && /^\d{4}-\d{2}$/.test(month)
+        ? dayjs(month + '-01').endOf('month').toDate()
+        : new Date();
+
     const result = await prisma.$transaction(async (prisma) => {
       const settlementExpense = await prisma.expense.create({
         data: {
           title: `Settlement: ${debtor.name} to ${creditor.name}`,
           amount: parseFloat(amount),
-          date: date ? new Date(date) : new Date(),
+          date: settlementDate,
           type: 'SETTLEMENT',
           payerId: debtorId,
           createdById: req.userId!,
@@ -202,6 +287,7 @@ router.post('/settle', async (req: AuthRequest, res: Response) => {
       debtor: debtor.name,
       creditor: creditor.name,
       amount: parseFloat(amount),
+      month: month || 'global',
     });
     res.status(201).json({ message: 'Debt settled successfully', settlement: result });
   } catch (error: any) {
