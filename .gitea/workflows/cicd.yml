@@ -60,6 +60,7 @@ jobs:
           fi
           npm version "$VERSION" --no-git-tag-version --allow-same-version
           echo "//gitea.central.lan/api/packages/${GITHUB_REPOSITORY_OWNER}/npm/:_authToken=${GITEA_TOKEN}" >> ~/.npmrc
+          npm config set registry https://gitea.central.lan/api/packages/${GITHUB_REPOSITORY_OWNER}/npm/
           npm config set -- '//gitea.central.lan/api/packages/${GITHUB_REPOSITORY_OWNER}/npm/:_authToken' "${GITEA_TOKEN}"
           npm config set strict-ssl false
           npm publish
