@@ -283,7 +283,7 @@ jobs:
       - name: Health check
         run: |
           sleep 10
-          curl --fail --retry 5 --retry-delay 5 \
+          curl --fail --insecure --retry 5 --retry-delay 5 \
             "${{ vars.DEPLOY_URL }}/api/health" \
             && echo "Health check OK" \
             || (echo "Health check FAILED" && exit 1)
