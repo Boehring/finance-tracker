@@ -270,8 +270,8 @@ jobs:
             export JWT_SECRET="${{ secrets.JWT_SECRET }}"
 
             # Descargar las nuevas imágenes y recrear los contenedores
-            docker compose -f docker-compose.prod.yml --env-file .env pull
-            docker compose -f docker-compose.prod.yml --env-file .env up -d --remove-orphans
+            docker compose -f docker-compose.prod.yml --env-file .env.prod pull
+            docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --remove-orphans
 
             # Limpieza de imágenes huérfanas
             docker image prune -f
