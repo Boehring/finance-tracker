@@ -62,12 +62,15 @@ jobs:
           echo "//gitea.central.lan/api/packages/${GITHUB_REPOSITORY_OWNER}/npm/:_authToken=${GITEA_TOKEN}" >> ~/.npmrc
           npm config set registry https://gitea.central.lan/api/packages/${GITHUB_REPOSITORY_OWNER}/npm/
           npm config set strict-ssl false
-          output=$(npm publish 2>&1); rc=$?
-          if [ $rc -ne 0 ]; then
-            echo "$output"
-            echo "$output" | grep -q "E409\|already exists" || exit 1
-            echo "Version $VERSION already published, skipping."
-          fi
+          npm publish 2>&1 || {
+            NPM_LOG=$(ls -t ~/.npm/_logs/*.log 2>/dev/null | head -1)
+            if [ -n "$NPM_LOG" ] && grep -qE "E409|already exists" "$NPM_LOG"; then
+              echo "Version $VERSION already published (409), skipping."
+            else
+              [ -n "$NPM_LOG" ] && cat "$NPM_LOG"
+              exit 1
+            fi
+          }
 
   # ─────────────────────────────────────────────
   # JOB 2 – Construir el frontend (Vite → dist/)
@@ -109,12 +112,15 @@ jobs:
           echo "//gitea.central.lan/api/packages/${GITHUB_REPOSITORY_OWNER}/npm/:_authToken=${GITEA_TOKEN}" >> ~/.npmrc
           npm config set registry https://gitea.central.lan/api/packages/${GITHUB_REPOSITORY_OWNER}/npm/
           npm config set strict-ssl false
-          output=$(npm publish 2>&1); rc=$?
-          if [ $rc -ne 0 ]; then
-            echo "$output"
-            echo "$output" | grep -q "E409\|already exists" || exit 1
-            echo "Version $VERSION already published, skipping."
-          fi
+          npm publish 2>&1 || {
+            NPM_LOG=$(ls -t ~/.npm/_logs/*.log 2>/dev/null | head -1)
+            if [ -n "$NPM_LOG" ] && grep -qE "E409|already exists" "$NPM_LOG"; then
+              echo "Version $VERSION already published (409), skipping."
+            else
+              [ -n "$NPM_LOG" ] && cat "$NPM_LOG"
+              exit 1
+            fi
+          }
 
   # ─────────────────────────────────────────────
   # JOB 3 – Construir y publicar imágenes Docker
