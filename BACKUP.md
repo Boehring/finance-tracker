@@ -1,10 +1,25 @@
-# Backup procedure (pre-Kubernetes migration prep)
+# Backup procedure (Docker era — superseded)
+
+**Production moved to k3s on 2026-09-17** — see [MIGRATION.md](MIGRATION.md)
+and the Wiki.js page "Finance Tracker (migración a k3s)". This document,
+and the `scripts/backup/` tooling it describes, no longer apply to
+production: nothing writes to the `finance-tracker_sqlite_data` /
+`finance-tracker_uploads` Docker volumes anymore (the compose stack on
+`dassault` was stopped, volumes kept only as a last-resort rollback).
+Nightly backups now run in-cluster via `sqlite-backup-cronjob.yaml` in the
+`k3s/finance-tracker` manifest repo.
+
+Kept below for historical reference and in case a rollback to Docker is
+ever needed.
+
+---
 
 This documents how to preserve the persistent state of the production stack
 (`docker-compose.prod.yml`) before any risky operation, and lays the
 groundwork for a later migration to Kubernetes. **This phase only covers
-backup/restore of the current Docker deployment — the actual migration to
-Kubernetes is a separate, later effort.**
+backup/restore of the current Docker deployment.** The k3s migration itself
+— manifests + the scripts that load one of these backups into the
+cluster's PVCs — is now underway; see [MIGRATION.md](MIGRATION.md).
 
 ## What needs to be preserved
 
@@ -91,6 +106,10 @@ once the manual procedure has been exercised a few times and the retention
 policy above still looks right.
 
 ## Notes for the eventual Kubernetes migration
+
+These predated the migration work and are now implemented as described —
+see [MIGRATION.md](MIGRATION.md) for the actual manifests/scripts. Kept
+here as the rationale behind those choices.
 
 - The backup format (plain `.gz` SQLite file + tarball, not a Docker
   volume snapshot) was chosen so it can be loaded into a PVC later via a
